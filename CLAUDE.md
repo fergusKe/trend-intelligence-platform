@@ -44,16 +44,18 @@
 
 ## 目前狀態（2026-07-08 更新——此段是本專案的活狀態正本，接手先讀這段）
 
-📐 **規劃階段：五份 design 全數完成、尚無實作碼**（`docs/plans/` 仍空、五個程式目錄仍只有 scaffold）。下一動作＝Opus 寫 implementation plan。
+📐 **規劃階段：P0–P5 六階段 design 全數完成、尚無實作碼**（`docs/plans/` 仍空、程式目錄仍只有 scaffold）。下一動作＝Opus 寫 implementation plan。
 
-**五份 design 全數完成、且全達「Fable 5 design 精確度契約 8 條」（可據以寫 plan）**：
+**六份 design 全數完成、且全達「Fable 5 design 精確度契約 8 條」（可據以寫 plan）**：
 - **P0 平台底座**（`...-P0-platform-foundation-design.md`）：kind + ArgoCD app-of-apps + GitHub Actions/GHCR + kube-prometheus-stack。**收緊 pass `7999f0d`**（修 Grafana 隨機密碼行為、CI actions 版本、Dockerfile/驗收補到可照抄；錨點與 sync-wave 0/1/2 零變動）。
 - **P1 資料管線**（`...-P1-data-pipeline-design.md`）：Airflow KubernetesExecutor + spark-operator + MinIO/Iceberg JDBC catalog；**§6a Gold marts 5 表合約**（`gold_trending_daily`/`gold_channel_performance`/`gold_category_daily`/`gold_video_velocity_hourly`/`gold_video_lifecycle`，additive-only，是 P2 介面）。**收緊 pass `432fb6a`**（修 §6 freshness `loaded_at_field` 對不存在欄的矛盾、補 k8s DNS/env 注入/角色 GRANT+`ALTER DEFAULT PRIVILEGES` 合約；§6a/§3/§5/§8 錨點一字未動）。
 - **P1 留言 ingest 增補**（`...-P1-comments-ingest-design.md`，`17da698`）：additive 加抓 YouTube 留言（決策 B）；quota 4000u 累積型（8–14 天湊百萬列）、Bronze 邊界遮蔽去識別、Silver `silver_youtube_comments`（13 欄，MERGE by comment_id）是 P2b/P2c 上游合約。不動既有 5 表。
 - **P2 三條 ML 垂直**（`...-P2-ml-verticals-design.md`，`0032afc`，504 行）：(a) 時序預測 label=`doubled_in_24h`、τ=t0+3h 防洩漏、drift PSI+KS+rolling AUC；(b) LangGraph CRAG（e5-small 本地 embedding·pgvector HNSW·Ollama qwen3:8b/Gemini fallback·k8s→host ExternalName）；(c) 微調 A=distilbert-multilingual 3類 macro-F1≥0.70、B=Qwen3-1.7B LoRA fp16→GGUF→Ollama。對 P4=五表匯出合約，線上端點排除（Vercel 打不到本地 k8s）。
 - **P3 PTT Kafka ingest**（`...-P3-ptt-ingest-design.md`，`24132ee`）：Strimzi 單 broker KRaft、手動 commit at-least-once、Bronze 信封決定性 key、Silver 右尺寸用 Python（非 Spark）、一張 `gold_ptt_board_daily`。
+- **P4 呈現層**（`...-P4-presentation-layer-design.md`，`934cf54`）：匯出 DAG `export_frontend_data`→MinIO→host `make export-sync`→人審 commit 進 `frontend/public/data/`（**committed 靜態 minified JSON**，否決 Neon/物件儲存，k8s 不持 GitHub 權杖）；前端 **Next.js 16.2 App Router `output:'export'` 純靜態**（拓撲鐵律編譯期強制）+ Recharts，8 頁；MCP = **FastMCP 3.2 部署 Prefect Horizon（上雲，可被遠端 Claude 查）**，10 工具讀公開 `/data/*.json`，不可用則降級本地 demo 零改碼；Vercel root dir=`frontend/` 零 env。ML 表缺席 `status:"absent"` 容忍（P1 完成即可先上線）。
+- **P5 收尾**（`...-P5-polish-hardening-design.md`，`04b5874`）：CI 安全掃描 **Trivy+gitleaks+CodeQL**（**image gate 卡 GitOps 交棒點**=CRITICAL-with-fix 沒清就不 bump manifest）；架構圖 **Mermaid 4 張**；面試敘事 **三份 JD one-pager + `DECISIONS.md`（ADR-lite 16 條）**。§1 專表畫清「現可定 vs 執行期對真 artifact 做（掃真 image/截 8 圖+1 GIF）」界線，初版禁量化成果。
 
-**下一步**：Opus 逐份寫 implementation plan（plan 全延後至 spec 完備——現已完備）→ 交執行 session。**P0 必先實作**（其他跑在它上面）；P1 留言/P2/P3 皆吃 P1 產物。各 design 尾段有 plan-前實查點清單（皆帶預設傾向）。
+**下一步**：Opus 逐份寫 implementation plan（spec 已完備）→ 交執行 session。**P0 必先實作**（其他跑在它上面）；P1 留言/P2/P3 吃 P1 產物；P4 吃 P1+P2+P3 匯出合約；P5 收尾在 P0–P4 實作後執行（但 spec 已定）。各 design 尾段有 plan-前實查點清單（皆帶預設傾向）。
 
 **關鍵鎖定決策**（正本在 NORTH_STAR「已鎖定決策清單」+「LLM／微調層與留言語料」專章 + M4 原生算力原則）：串流只 Kafka（P3，砍 RabbitMQ/Celery/Redis）· agent 框架 LangGraph（砍 CrewAI）· 向量庫 pgvector · embedding 本地 · 生成 Ollama/Gemini 可切 · 微調 HuggingFace（砍 MLX）· **重算力原生跑 M4 host**（kind 摸不到 Apple GPU）產出可攜雲端 · 呈現層 Next.js/Vercel（平台不部署，匯出 CSV/Parquet 為合約）· MCP server 為 P4/P5 加分。
 

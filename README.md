@@ -4,7 +4,7 @@
 
 以 YouTube 熱門趨勢為主幹（PTT 論壇為第二來源），把原始資料從 **ingest → Lakehouse → 建模 → 上線監控**打通一條龍，全程跑在 **Kubernetes**、以 **GitOps** 部署、具備完整可觀測性。一個平台同時展示資料工程、模型維運、平台工程三種能力。
 
-> 狀態：📐 **規劃完成、實作待啟動**。P0–P3 五份設計 spec 全數完成（皆通過內建的「精確度契約 8 條」），尚無實作碼。架構正本見 [`docs/architecture/NORTH_STAR.md`](docs/architecture/NORTH_STAR.md)；接手指南與最新進度見 [`CLAUDE.md`](CLAUDE.md)。
+> 狀態：📐 **規劃完成、實作待啟動**。P0–P5 六份設計 spec 全數完成（皆通過內建的「精確度契約 8 條」），尚無實作碼。架構正本見 [`docs/architecture/NORTH_STAR.md`](docs/architecture/NORTH_STAR.md)；接手指南與最新進度見 [`CLAUDE.md`](CLAUDE.md)。
 
 ---
 
@@ -65,8 +65,8 @@
 | **P1** 資料管線 | YouTube ingest（metadata＋留言）→ Lakehouse(Iceberg/Spark/dbt) → Postgres，Airflow 編排 | 資料工程 | ✅ design（＋留言增補 design） |
 | **P2** ML 垂直 ×3 | (a) tabular 時序預測；(b) LangGraph/CRAG RAG；(c) HuggingFace 微調（分類器＋LLM LoRA） | MLOps / LLMOps | ✅ design |
 | **P3** 進階 ingest | PTT 分散式容錯爬蟲第二來源，Kafka 佇列範式（跟 P1 批次刻意不同） | 爬蟲 / 串流硬實力 | ✅ design |
-| **P4** 呈現層 | Next.js 儀表板讀匯出資料 → 部署 Vercel；平台端匯出 DAG；＋ MCP server | 前端/全端 + 整體展示 | ⏳ 待 P2 後出 spec |
-| **P5** 收尾 | 安全掃描、架構圖、README/面試敘事打磨 | 整體打磨 | ⏳ 待實作後 |
+| **P4** 呈現層 | Next.js 儀表板讀匯出資料 → 部署 Vercel；平台端匯出 DAG；＋ MCP server | 前端/全端 + 整體展示 | ✅ design |
+| **P5** 收尾 | 安全掃描（Trivy+gitleaks+CodeQL）、架構圖（Mermaid）、三 JD 面試敘事 | 整體打磨 | ✅ design |
 
 ## 目錄結構
 
