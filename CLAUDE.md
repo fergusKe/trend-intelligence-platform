@@ -29,6 +29,19 @@
 - **plan**：`docs/plans/YYYY-MM-DD-P<n>-<topic>-implementation.md`
 - 查快速演進套件（k8s/ArgoCD/Airflow/MLflow/KServe/dbt/Iceberg）用 context7 先查最新官方文件再寫。
 
+### Fable 5 design 精確度契約（每份 design 必達；派 Fable 5 前把本段連結進 brief header）
+
+> 目的：**design 要明確到寫 implementation plan 的人零誤解、未來規劃不漂**。派 Fable 5 出 design 時，dispatch prompt 與 brief header 都要求它滿足以下 8 條；產出後 Opus 逐條驗收才據以寫 plan。
+
+1. **開放問題收斂成單一決定**——禁止 TBD／延後／「由 plan 定」／兩案並陳。真的非實查不能定，才標「plan 前需實查 X」並給**預設傾向**與判準。
+2. **技術選型具體到版本 + context7 查證**——快速演進套件（k8s/ArgoCD/Airflow/MLflow/KServe/dbt/Iceberg/LangGraph/HuggingFace/PEFT/Ollama/pgvector/Kafka/Strimzi…）不得憑記憶，design 標明查證過的版本與用法。
+3. **資料契約欄位級**——schema 列欄名/型別/鍵/分區；跨階段介面（Gold 5 表、`silver_youtube_comments` 等）標「穩定合約」。
+4. **部署形狀具體**——manifest/CRD/DAG/InferenceService 形狀、ArgoCD sync-wave 位置、kustomize 佈局、檔案路徑都寫出來。
+5. **沿用既有慣例不重造**——明講對齊哪一份既有 design 的哪個模式（Bronze key、Silver loader、secret 姿態…）。
+6. **進化非複刻**——取材既有專案原始碼時，標清「取什麼邏輯 vs 重造哪個工程層」的界線。
+7. **硬約束貫徹**——一個工作一個工具、M4 原生算力界線、拓撲（平台不部署／前端 Vercel／匯出檔為合約）、secret 走 k8s Secret 不硬編碼、非互動不向使用者提問。
+8. **每步可測**——端到端驗收清單可實跑（有測試/smoke/DQ），不是敘述性「應該會動」。
+
 ## 目前狀態（2026-07-08 更新——此段是本專案的活狀態正本，接手先讀這段）
 
 📐 **規劃階段：spec 產線進行中，尚無實作碼**（`docs/plans/` 仍空、五個程式目錄仍只有 scaffold）。
