@@ -44,18 +44,16 @@
 
 ## 目前狀態（2026-07-08 更新——此段是本專案的活狀態正本，接手先讀這段）
 
-📐 **規劃階段：spec 產線進行中，尚無實作碼**（`docs/plans/` 仍空、五個程式目錄仍只有 scaffold）。
+📐 **規劃階段：五份 design 全數完成、尚無實作碼**（`docs/plans/` 仍空、五個程式目錄仍只有 scaffold）。下一動作＝Opus 寫 implementation plan。
 
-**已完成的 design（可據以寫 plan）**：
-- **P0 平台底座** design（`docs/specs/2026-07-08-P0-platform-foundation-design.md`）：kind + ArgoCD app-of-apps + GitHub Actions/GHCR + kube-prometheus-stack。
-- **P1 資料管線** design（`...-P1-data-pipeline-design.md`）：Airflow KubernetesExecutor + spark-operator + MinIO/Iceberg JDBC catalog；**§6a Gold marts 5 表合約**（`gold_trending_daily` / `gold_channel_performance` / `gold_category_daily` / `gold_video_velocity_hourly` / `gold_video_lifecycle`，additive-only，是 P2 介面）。
+**五份 design 全數完成、且全達「Fable 5 design 精確度契約 8 條」（可據以寫 plan）**：
+- **P0 平台底座**（`...-P0-platform-foundation-design.md`）：kind + ArgoCD app-of-apps + GitHub Actions/GHCR + kube-prometheus-stack。**收緊 pass `7999f0d`**（修 Grafana 隨機密碼行為、CI actions 版本、Dockerfile/驗收補到可照抄；錨點與 sync-wave 0/1/2 零變動）。
+- **P1 資料管線**（`...-P1-data-pipeline-design.md`）：Airflow KubernetesExecutor + spark-operator + MinIO/Iceberg JDBC catalog；**§6a Gold marts 5 表合約**（`gold_trending_daily`/`gold_channel_performance`/`gold_category_daily`/`gold_video_velocity_hourly`/`gold_video_lifecycle`，additive-only，是 P2 介面）。**收緊 pass `432fb6a`**（修 §6 freshness `loaded_at_field` 對不存在欄的矛盾、補 k8s DNS/env 注入/角色 GRANT+`ALTER DEFAULT PRIVILEGES` 合約；§6a/§3/§5/§8 錨點一字未動）。
+- **P1 留言 ingest 增補**（`...-P1-comments-ingest-design.md`，`17da698`）：additive 加抓 YouTube 留言（決策 B）；quota 4000u 累積型（8–14 天湊百萬列）、Bronze 邊界遮蔽去識別、Silver `silver_youtube_comments`（13 欄，MERGE by comment_id）是 P2b/P2c 上游合約。不動既有 5 表。
+- **P2 三條 ML 垂直**（`...-P2-ml-verticals-design.md`，`0032afc`，504 行）：(a) 時序預測 label=`doubled_in_24h`、τ=t0+3h 防洩漏、drift PSI+KS+rolling AUC；(b) LangGraph CRAG（e5-small 本地 embedding·pgvector HNSW·Ollama qwen3:8b/Gemini fallback·k8s→host ExternalName）；(c) 微調 A=distilbert-multilingual 3類 macro-F1≥0.70、B=Qwen3-1.7B LoRA fp16→GGUF→Ollama。對 P4=五表匯出合約，線上端點排除（Vercel 打不到本地 k8s）。
+- **P3 PTT Kafka ingest**（`...-P3-ptt-ingest-design.md`，`24132ee`）：Strimzi 單 broker KRaft、手動 commit at-least-once、Bronze 信封決定性 key、Silver 右尺寸用 Python（非 Spark）、一張 `gold_ptt_board_daily`。
 
-**brief 已備、design 產出中（3 隻 Fable 5 並行跑，產物是 design 檔，會 commit 進 `docs/specs/`）**：
-- **P1 留言 ingest 增補**（`...-P1-comments-ingest-addendum-brief.md`）：additive 加抓 YouTube 留言（決策 B），正當化 Spark/Iceberg + 餵 RAG/微調；產出 `silver_youtube_comments` 是 P2b/P2c 上游合約。⚠️YouTube API quota 是硬約束（累積型抓 top 影片）。
-- **P2 三條 ML 垂直**（`...-P2-ml-verticals-brief.md`）：(a) 時序 tabular 預測（DVC/MLflow/KServe/drift）、(b) LangGraph agentic RAG + CRAG（pgvector/本地 embedding/Ollama 預設·Gemini fallback）、(c) HuggingFace 微調 = A DistilBERT 情緒分類器（LLM 弱標註蒸餾→KServe CPU）+ B 小 LLM PEFT LoRA 標題生成器。
-- **P3 PTT ingest**（`...-P3-ptt-ingest-brief.md`）：Kafka 佇列範式（KRaft 單 broker）驅動的分散式容錯爬蟲，跟 P1 批次刻意不同的第二 ingest。
-
-**下一步**：3 份 design 落地後 → Opus 逐份寫 implementation plan（plan 全延後至 spec 完備）→ 交執行 session。P0 必先實作（其他跑在它上面）。
+**下一步**：Opus 逐份寫 implementation plan（plan 全延後至 spec 完備——現已完備）→ 交執行 session。**P0 必先實作**（其他跑在它上面）；P1 留言/P2/P3 皆吃 P1 產物。各 design 尾段有 plan-前實查點清單（皆帶預設傾向）。
 
 **關鍵鎖定決策**（正本在 NORTH_STAR「已鎖定決策清單」+「LLM／微調層與留言語料」專章 + M4 原生算力原則）：串流只 Kafka（P3，砍 RabbitMQ/Celery/Redis）· agent 框架 LangGraph（砍 CrewAI）· 向量庫 pgvector · embedding 本地 · 生成 Ollama/Gemini 可切 · 微調 HuggingFace（砍 MLX）· **重算力原生跑 M4 host**（kind 摸不到 Apple GPU）產出可攜雲端 · 呈現層 Next.js/Vercel（平台不部署，匯出 CSV/Parquet 為合約）· MCP server 為 P4/P5 加分。
 
