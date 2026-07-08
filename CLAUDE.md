@@ -14,15 +14,20 @@
 2. 看 `docs/specs/` 有哪些階段 spec 已出、`docs/plans/` 有哪些 plan 已寫、`git log` 看做到哪。
 3. 確認你要做的階段（P0→P4 依序，P0 平台底座必須先做）。
 
-## 工作流（誰做什麼）
+## 工作流（誰做什麼）— 走 superpowers skills
+
+本專案沿用 **superpowers** 這套工作流（它是本機全域 plugin，任何 session 直接 invoke，無需 vendoring）。**不要**複製其他專案的重裝治理層（CORE_RULES / 雙 harness 同步 / memory 系統）——本專案是單人 portfolio，`NORTH_STAR.md` + 本檔 + `docs/{specs,plans}` 就夠。
 
 ```
-Opus（規劃）帶 brainstorm + 寫北極星 + 逐階段交 Fable 5 出 spec + 據 spec 寫 implementation plan
-  → Fable 5 讀 brief/北極星 → 出 docs/specs/<date>-P<n>-<topic>-design.md
-  → 執行 session 讀 plan 逐 task 實作（TDD、頻繁 commit）
+規劃：superpowers:brainstorming → 出設計 → docs/specs/<date>-P<n>-<topic>-design.md
+實作：superpowers:writing-plans → 出 docs/plans/<date>-P<n>-<topic>-implementation.md
+執行：superpowers:subagent-driven-development（每 task 一個 subagent + 兩階段 review）
+      或 superpowers:executing-plans（inline 批次執行 + checkpoint）
 ```
+- 每個 P0–P4 階段各跑一輪這個循環，產出獨立可驗收的小 task（TDD、頻繁 commit）。
 - **spec**：`docs/specs/YYYY-MM-DD-P<n>-<topic>-design.md`
 - **plan**：`docs/plans/YYYY-MM-DD-P<n>-<topic>-implementation.md`
+- 查快速演進套件（k8s/ArgoCD/Airflow/MLflow/KServe/dbt/Iceberg）用 context7 先查最新官方文件再寫。
 
 ## 目前狀態
 
