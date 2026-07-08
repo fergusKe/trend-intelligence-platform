@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# Node
+node_modules/
+.next/
+dist/
+build/
+
+# Env / secrets（永不落 git）
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+service-account*.json
+
+# 資料 / 模型產物（走 DVC / 物件儲存，不進 git）
+data/
+*.parquet
+*.csv
+mlruns/
+*.pkl
+*.pt
+*.faiss
+
+# DVC
+/dvc.lock
+
+# k8s / local
+.kube/
+kubeconfig*
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.log
