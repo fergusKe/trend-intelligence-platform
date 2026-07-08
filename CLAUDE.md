@@ -42,9 +42,11 @@
 7. **硬約束貫徹**——一個工作一個工具、M4 原生算力界線、拓撲（平台不部署／前端 Vercel／匯出檔為合約）、secret 走 k8s Secret 不硬編碼、非互動不向使用者提問。
 8. **每步可測**——端到端驗收清單可實跑（有測試/smoke/DQ），不是敘述性「應該會動」。
 
-## 目前狀態（2026-07-08 更新——此段是本專案的活狀態正本，接手先讀這段）
+## 目前狀態（2026-07-09 更新——此段是本專案的活狀態正本，接手先讀這段）
 
-📐 **規劃階段：P0–P5 六階段 design 全數完成、尚無實作碼**（`docs/plans/` 仍空、程式目錄仍只有 scaffold）。**下一動作＝接手 session 走 `superpowers:writing-plans`、從 P0 起逐份 design 寫 implementation plan**。（規劃/spec 產線已完整收束，無其他待出 spec。）
+📐 **規劃階段：P0–P5 六階段 design 全數完成、尚無實作碼**（`docs/plans/` 仍空、程式目錄仍只有 scaffold）。**下一動作＝接手 session 走 `superpowers:writing-plans`、從 P0 起逐份 design 寫 implementation plan**。
+
+🆕 **2026-07-09 擴充（規劃中，spec 未出）**：P0–P5 之外**新增 GA4 第二真來源 ＋ P6 推薦／P7 DMP／即時 Flink 三垂直**（正本論證＝NORTH_STAR「GA4 第二真來源 ＋ 三工具翻案」段）。核心動機：推薦需「真使用者×商品×互動」三角，YouTube/PTT 只有商品＋聚合、無真使用者 → 引入公開 `ga4_obfuscated_sample_ecommerce`（area02 真資料只當求職憑證、**不進本 repo**）。翻案三工具 ＋Redis／＋ClickHouse／＋Flink 各有獨特職務。**這幾份 design 尚未產出**——序：寫 Fable 5 brief（GA4 地基先 → P6/P7/即時後）→ 派 Fable 5 → 才寫 plan。**故「P0–P5 spec 收束」不代表全平台收束；P6/P7/即時是新開一輪 spec 產線。**
 
 **六份 design 全數完成、且全達「Fable 5 design 精確度契約 8 條」（可據以寫 plan）**：
 - **P0 平台底座**（`...-P0-platform-foundation-design.md`）：kind + ArgoCD app-of-apps + GitHub Actions/GHCR + kube-prometheus-stack。**收緊 pass `7999f0d`**（修 Grafana 隨機密碼行為、CI actions 版本、Dockerfile/驗收補到可照抄；錨點與 sync-wave 0/1/2 零變動）。
@@ -57,7 +59,7 @@
 
 **下一步**：接手 session 走 `superpowers:writing-plans` 逐份寫 implementation plan（spec 已完備）→ 同一或另一 session 執行。**P0 必先實作**（其他跑在它上面）；P1 留言/P2/P3 吃 P1 產物；P4 吃 P1+P2+P3 匯出合約；P5 收尾在 P0–P4 實作後執行（但 spec 已定）。各 design 尾段有 plan-前實查點清單（皆帶預設傾向）。
 
-**關鍵鎖定決策**（正本在 NORTH_STAR「已鎖定決策清單」+「LLM／微調層與留言語料」專章 + M4 原生算力原則）：串流只 Kafka（P3，砍 RabbitMQ/Celery/Redis）· agent 框架 LangGraph（砍 CrewAI）· 向量庫 pgvector · embedding 本地 · 生成 Ollama/Gemini 可切 · 微調 HuggingFace（砍 MLX）· **重算力原生跑 M4 host**（kind 摸不到 Apple GPU）產出可攜雲端 · 呈現層 Next.js/Vercel（平台不部署，匯出 CSV/Parquet 為合約）· MCP server 為 P4/P5 加分。
+**關鍵鎖定決策**（正本在 NORTH_STAR「已鎖定決策清單」+「LLM／微調層與留言語料」+「GA4 第二真來源 ＋ 三工具翻案」+ M4 原生算力原則）：Kafka（P3 佇列）· **＋Redis/ClickHouse/Flink（2026-07-09 翻案，各有獨特職務，見上）** · agent 框架 LangGraph（砍 CrewAI）· 向量庫 pgvector · embedding 本地 · 生成 Ollama/Gemini 可切 · 微調 HuggingFace（砍 MLX）· **重算力原生跑 M4 host**（kind 摸不到 Apple GPU）產出可攜雲端 · 呈現層 Next.js/Vercel（平台不部署，匯出 JSON 為合約，前端打不到本地 k8s）· MCP server 為 P4/P5 加分 · **前端說明式 UI**（仿 ga-insight 三層：InfoTooltip/ChartCaption/Explainer，跨 P4/P6/P7 硬性）。
 
 ## 目錄
 
@@ -71,7 +73,8 @@ docs/architecture/  docs/specs/  docs/plans/
 
 - **Git commit 中文**：`動作(範圍)：說明`（例：`建置(platform)：kind 叢集 + ArgoCD bootstrap`）。
 - **TDD**：先寫失敗測試 → 實作 → 綠。頻繁小 commit。
-- **一個工作一個工具**（不亂的紀律，違反 = 走回 finmind 老路）：排程只 Airflow、DB 只 Postgres（向量庫用 pgvector 同顆）、監控只 Prometheus/Grafana、**串流只 Kafka 且只 P3**（砍 RabbitMQ/Celery/Redis）、agent 框架只 LangGraph（砍 CrewAI）、微調只 HuggingFace（砍 MLX）、**不用 ClickHouse**。
+- **一個工作一個工具**（不亂的紀律，違反 = 走回 finmind 老路）：排程只 Airflow、DB 只 Postgres（向量庫用 pgvector 同顆）、監控只 Prometheus/Grafana、agent 框架只 LangGraph（砍 CrewAI）、微調只 HuggingFace（砍 MLX）。
+  - **⚠️ 2026-07-09 翻案（Fergus 批准）**：原「串流只 Kafka 且只 P3、砍 Redis、不用 ClickHouse」三條，因 GA4 第二真來源帶入 P6 推薦/P7 DMP/即時三垂直而翻案——**＋Redis**（線上服務 <50ms 特徵/候選快取）、**＋ClickHouse**（GA4 事件流欄式 OLAP）、**＋Flink**（有狀態事件時間即時特徵）各解決一個 P1–P5 做不到的獨特工作，屬「一工一具」的正確套用（拒冗餘，非拒新工具），**非**違反紀律。正本論證見 NORTH_STAR「GA4 第二真來源 ＋ 三工具翻案」段。仍守：排程只 Airflow、OLTP 只 Postgres、agent 只 LangGraph、微調只 HuggingFace 不變。
 - **取材既有專案唯讀不改**：可複用素材在 NORTH_STAR「可複用素材地圖」，全在 `/Users/fergus/Desktop/workshop/fergus/` 底下（yt-trending / ga4-analytics / youtube-analytics / ptt-crawler / finmind + 三門課）。**唯讀取材，不改原專案**。
 - **快速演進套件先查最新官方文件再寫**（k8s / ArgoCD / Airflow / MLflow / KServe / dbt / Iceberg 升級或新接時）。
 

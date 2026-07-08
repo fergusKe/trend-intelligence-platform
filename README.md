@@ -4,7 +4,7 @@
 
 以 YouTube 熱門趨勢為主幹（PTT 論壇為第二來源），把原始資料從 **ingest → Lakehouse → 建模 → 上線監控**打通一條龍，全程跑在 **Kubernetes**、以 **GitOps** 部署、具備完整可觀測性。一個平台同時展示資料工程、模型維運、平台工程三種能力。
 
-> 狀態：📐 **規劃完成、實作待啟動**。P0–P5 六份設計 spec 全數完成（皆通過內建的「精確度契約 8 條」），尚無實作碼。架構正本見 [`docs/architecture/NORTH_STAR.md`](docs/architecture/NORTH_STAR.md)；接手指南與最新進度見 [`CLAUDE.md`](CLAUDE.md)。
+> 狀態：📐 **規劃中、實作待啟動**。P0–P5 六份設計 spec 全數完成（皆通過內建的「精確度契約 8 條」）、尚無實作碼；**2026-07-09 起新增一輪擴充**——GA4 第二真來源 ＋ **P6 推薦／P7 DMP／即時 Flink 三垂直**（spec 待產）。架構正本見 [`docs/architecture/NORTH_STAR.md`](docs/architecture/NORTH_STAR.md)；接手指南與最新進度見 [`CLAUDE.md`](CLAUDE.md)。
 
 ---
 
@@ -33,7 +33,7 @@
 │  ── 可觀測性 ────────────────────────────────────────────     │
 │   Prometheus + Grafana（服務指標 + 模型 drift/成本 儀表板）     │
 └───────────────────────────────────────────────────────────────┘
-       │ 平台端 Airflow 匯出 DAG：Gold + ML 輸出 → CSV/Parquet（合約邊界）
+       │ 平台端 Airflow 匯出 DAG：Gold + ML 輸出 → 靜態 JSON（合約邊界；P4 定案）
        ▼
 [Next.js on Vercel]  讀匯出資料渲染儀表板（唯一對外公開產物）＋ MCP server（Gold 開成 agent 工具）
 ```
@@ -54,7 +54,11 @@
 | ML 生命週期（tabular） | **DVC** · **MLflow** · **KServe**（RawDeployment） |
 | LLMOps / RAG | **LangChain + LangGraph**（agentic + CRAG）· 本地 embedding · **Ollama**/Gemini 可切 · prompt 版本 / 評估閘 / 成本監控 |
 | 微調 | **HuggingFace**（transformers · PEFT LoRA）— 算力原生跑 M4，產出可攜雲端 |
-| 呈現層 | **Next.js**（部署 **Vercel**，讀匯出資料）· **MCP server**（FastMCP，加分） |
+| 推薦系統（P6，規劃中） | 召回（CF item2vec / pgvector 語意）· LTR 排序 · **Redis**（線上特徵/候選快取）· KServe 線上服務 · LangGraph 生成推薦理由 · A/B + hit@k/ndcg@k |
+| 使用者畫像/DMP（P7，規劃中） | RFM/LTV/行為標籤 · **ClickHouse**（事件流欄式 OLAP）· 人群圈選 DSL |
+| 即時特徵（規劃中） | **Flink**（GA4 `events_intraday` 有狀態事件時間特徵；以標註事件重放示範） |
+| 真使用者資料源（規劃中） | 公開 **`ga4_obfuscated_sample_ecommerce`**（GA4 電商事件；帶入 user×item×interaction 三角） |
+| 呈現層 | **Next.js**（部署 **Vercel**，讀匯出資料）· **MCP server**（FastMCP，加分）· **說明式 UI**（仿 ga-insight：InfoTooltip/ChartCaption/Explainer） |
 | 可觀測性 | **Prometheus + Grafana** |
 
 ## 分階段藍圖
@@ -67,6 +71,11 @@
 | **P3** 進階 ingest | PTT 分散式容錯爬蟲第二來源，Kafka 佇列範式（跟 P1 批次刻意不同） | 爬蟲 / 串流硬實力 | ✅ design |
 | **P4** 呈現層 | Next.js 儀表板讀匯出資料 → 部署 Vercel；平台端匯出 DAG；＋ MCP server | 前端/全端 + 整體展示 | ✅ design |
 | **P5** 收尾 | 安全掃描（Trivy+gitleaks+CodeQL）、架構圖（Mermaid）、三 JD 面試敘事 | 整體打磨 | ✅ design |
+| **P6** 推薦系統 🆕 | GA4 全漏斗 → 召回(CF/語意) → LTR 排序 → Redis 快取 + KServe 線上服務 → LangGraph 推薦理由 → A/B + 離線評估 | MLOps / 推薦系統 | 🗒️ 待 spec |
+| **P7** 使用者畫像/DMP 🆕 | 真使用者 RFM/LTV/行為標籤 → ClickHouse 事件 OLAP → 人群圈選 DSL → admin | DE / 資料分析 | 🗒️ 待 spec |
+| **即時特徵層** 🆕 | GA4 `events_intraday` → Flink 有狀態事件時間特徵 → 餵 P6 線上服務 | DE / 串流 | 🗒️ 待 spec |
+
+> 🆕 = **2026-07-09 擴充（規劃中）**：由「推薦需真使用者×商品×互動三角，YouTube/PTT 無真使用者」推動，引入公開 GA4 sample 為第二真來源（area02 真資料只當求職憑證、不進本 repo），並翻案加入 Redis/ClickHouse/Flink 三工具（各有獨特職務）。論證正本見 [`NORTH_STAR.md`](docs/architecture/NORTH_STAR.md) 對應段。
 
 ## 目錄結構
 
