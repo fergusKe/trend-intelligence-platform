@@ -25,13 +25,13 @@
    - 串流工具**只用 Kafka、且只在 P3**（KRaft 單 broker、免 Zookeeper）：P3 的佇列驅動爬蟲用它，**不引入 RabbitMQ、不引入 Celery、不引入 Redis**（一種 messaging 範式就好）。P1/P2 不用串流。
 3. **一個資料主幹（YouTube）餵所有層**。同一份資料同時餵 DE lakehouse、tabular 模型、LLM/RAG——這樣才不會長成兩個 domain。
 4. **層與層邊界乾淨**：每層有明確輸入/輸出介面，可獨立理解、獨立 demo。
-5. **分階段交付**：P0→P4 每階段獨立可展示、各一份 spec，疊上去。
+5. **分階段交付**：P0→P5 每階段獨立可展示、各一份 spec，疊上去。
 
 ---
 
 ## 為什麼主幹是 YouTube（而非 PTT / 金融）
 
-因為要同時放 **tabular 模型**和 **LLM/RAG** 兩條 ML 線，資料必須「同時有數字、也有文字」：
+因為 ML 三條線（**tabular 時序預測** / **LLM/RAG** / **微調**）橫跨數字與文字兩種模態，資料必須「同時有數字、也有文字」：
 
 | 要展示的 | 需要的資料 | YouTube | PTT |
 |---|---|---|---|
@@ -62,7 +62,7 @@ YouTube 是唯一「一個題材餵滿三塊」的來源，且資料每小時更
 | ML 生命週期（微調） | **HuggingFace**（可攜、標準、M4 免費跑小模型）：**(A) DistilBERT 留言情緒分類器**（LLM 弱標註→蒸餾→KServe CPU serving）＋ **(B) 小 LLM LoRA 標題生成器**（PEFT LoRA fp16，真實爆紅標題當語料）。微調算力**原生跑 M4/Metal**（kind 的 Linux VM 摸不到 Apple GPU），產出模型上 MLflow/MinIO、可攜雲端 GPU | P2 |
 | 呈現層（對外） | **Next.js**（讀匯出資料、部署 **Vercel**）；平台端 Gold→CSV/Parquet 匯出 DAG | P4 |
 | 對外資料介面（加分） | **MCP server**（FastMCP 把 Gold 趨勢資料開成工具，讓 Claude 等 agent 直接查）＝差異化 add-on | P4/P5 |
-| 收尾加分 | 安全掃描（Trivy/SonarQube，課程缺口）, 架構圖, 面試敘事 | P5 |
+| 收尾加分 | 安全掃描（**Trivy＋gitleaks＋CodeQL**，課程缺口）, 架構圖（Mermaid×4）, 面試敘事（三 JD one-pager＋`DECISIONS.md` ADR-lite） | P5 |
 
 **刻意省略以避免過度工程**：Kubeflow、Feast、Seldon、Terraform、service mesh、多雲、ClickHouse、多套排程器、**RabbitMQ/Celery/Redis**（串流只 Kafka）、**CrewAI**（agent 編排改 LangGraph）、**MLX**（微調框架收斂到 HuggingFace；MLX 僅在日後想在 Mac 上練更大模型時才當加分項，其輸出本就可攜故不衝突）、**Streamlit**（呈現統一 Next.js）。
 
@@ -79,7 +79,7 @@ YouTube 是唯一「一個題材餵滿三塊」的來源，且資料每小時更
 | **P4 呈現層** | `frontend/` + `orchestration/`（匯出 DAG） | Next.js 儀表板讀「Gold/ML 匯出資料」→ **部署 Vercel**（唯一對外可見產物）；平台端加 Gold→匯出（CSV/Parquet）步。**平台本身不部署**（本地 kind 按需跑） | 前端/全端 + 展示整體 | ✅ 公開網址 |
 | **P5 收尾** | 全域 | CI 補安全掃描、架構圖、README 打磨、面試敘事 | 全部 | — |
 
-**建置順序**：P0 必須先做（其他都跑在它上面）。P1 → P2 → P3 依序；P4 呈現層吃 P1 Gold + P2 ML 匯出（可在 P2 後做）；P5 收尾最後。P2 的 (a)(b) 兩條可並行或分兩份 sub-spec。
+**建置順序**：P0 必須先做（其他都跑在它上面）。P1 → P2 → P3 依序；P4 呈現層吃 P1 Gold + P2 ML 匯出（可在 P2 後做）；P5 收尾最後。P2 的三條垂直 (a)(b)(c) 已收斂成**單一份 design**（`0032afc`），實作時可切成三個並行 task 群。
 
 ### 呈現層與部署拓撲（P4；2026-07-08 定案）
 
