@@ -31,7 +31,7 @@
 
 ### Fable 5 design 精確度契約（每份 design 必達；派 Fable 5 前把本段連結進 brief header）
 
-> 目的：**design 要明確到寫 implementation plan 的人零誤解、未來規劃不漂**。派 Fable 5 出 design 時，dispatch prompt 與 brief header 都要求它滿足以下 8 條；產出後 Opus 逐條驗收才據以寫 plan。
+> 目的：**design 要明確到寫 implementation plan 的人零誤解、未來規劃不漂**。派 Fable 5 出 design 時，dispatch prompt 與 brief header 都要求它滿足以下 8 條；產出後**規劃者（你）逐條驗收**才據以寫 plan。（P0–P5 六份 design 已全數通過此契約；本段供日後若有新增/修改 design 時沿用。）
 
 1. **開放問題收斂成單一決定**——禁止 TBD／延後／「由 plan 定」／兩案並陳。真的非實查不能定，才標「plan 前需實查 X」並給**預設傾向**與判準。
 2. **技術選型具體到版本 + context7 查證**——快速演進套件（k8s/ArgoCD/Airflow/MLflow/KServe/dbt/Iceberg/LangGraph/HuggingFace/PEFT/Ollama/pgvector/Kafka/Strimzi…）不得憑記憶，design 標明查證過的版本與用法。
@@ -44,7 +44,7 @@
 
 ## 目前狀態（2026-07-08 更新——此段是本專案的活狀態正本，接手先讀這段）
 
-📐 **規劃階段：P0–P5 六階段 design 全數完成、尚無實作碼**（`docs/plans/` 仍空、程式目錄仍只有 scaffold）。下一動作＝Opus 寫 implementation plan。
+📐 **規劃階段：P0–P5 六階段 design 全數完成、尚無實作碼**（`docs/plans/` 仍空、程式目錄仍只有 scaffold）。**下一動作＝接手 session 走 `superpowers:writing-plans`、從 P0 起逐份 design 寫 implementation plan**。（規劃/spec 產線已完整收束，無其他待出 spec。）
 
 **六份 design 全數完成、且全達「Fable 5 design 精確度契約 8 條」（可據以寫 plan）**：
 - **P0 平台底座**（`...-P0-platform-foundation-design.md`）：kind + ArgoCD app-of-apps + GitHub Actions/GHCR + kube-prometheus-stack。**收緊 pass `7999f0d`**（修 Grafana 隨機密碼行為、CI actions 版本、Dockerfile/驗收補到可照抄；錨點與 sync-wave 0/1/2 零變動）。
@@ -55,7 +55,7 @@
 - **P4 呈現層**（`...-P4-presentation-layer-design.md`，`934cf54`）：匯出 DAG `export_frontend_data`→MinIO→host `make export-sync`→人審 commit 進 `frontend/public/data/`（**committed 靜態 minified JSON**，否決 Neon/物件儲存，k8s 不持 GitHub 權杖）；前端 **Next.js 16.2 App Router `output:'export'` 純靜態**（拓撲鐵律編譯期強制）+ Recharts，8 頁；MCP = **FastMCP 3.2 部署 Prefect Horizon（上雲，可被遠端 Claude 查）**，10 工具讀公開 `/data/*.json`，不可用則降級本地 demo 零改碼；Vercel root dir=`frontend/` 零 env。ML 表缺席 `status:"absent"` 容忍（P1 完成即可先上線）。
 - **P5 收尾**（`...-P5-polish-hardening-design.md`，`04b5874`）：CI 安全掃描 **Trivy+gitleaks+CodeQL**（**image gate 卡 GitOps 交棒點**=CRITICAL-with-fix 沒清就不 bump manifest）；架構圖 **Mermaid 4 張**；面試敘事 **三份 JD one-pager + `DECISIONS.md`（ADR-lite 16 條）**。§1 專表畫清「現可定 vs 執行期對真 artifact 做（掃真 image/截 8 圖+1 GIF）」界線，初版禁量化成果。
 
-**下一步**：Opus 逐份寫 implementation plan（spec 已完備）→ 交執行 session。**P0 必先實作**（其他跑在它上面）；P1 留言/P2/P3 吃 P1 產物；P4 吃 P1+P2+P3 匯出合約；P5 收尾在 P0–P4 實作後執行（但 spec 已定）。各 design 尾段有 plan-前實查點清單（皆帶預設傾向）。
+**下一步**：接手 session 走 `superpowers:writing-plans` 逐份寫 implementation plan（spec 已完備）→ 同一或另一 session 執行。**P0 必先實作**（其他跑在它上面）；P1 留言/P2/P3 吃 P1 產物；P4 吃 P1+P2+P3 匯出合約；P5 收尾在 P0–P4 實作後執行（但 spec 已定）。各 design 尾段有 plan-前實查點清單（皆帶預設傾向）。
 
 **關鍵鎖定決策**（正本在 NORTH_STAR「已鎖定決策清單」+「LLM／微調層與留言語料」專章 + M4 原生算力原則）：串流只 Kafka（P3，砍 RabbitMQ/Celery/Redis）· agent 框架 LangGraph（砍 CrewAI）· 向量庫 pgvector · embedding 本地 · 生成 Ollama/Gemini 可切 · 微調 HuggingFace（砍 MLX）· **重算力原生跑 M4 host**（kind 摸不到 Apple GPU）產出可攜雲端 · 呈現層 Next.js/Vercel（平台不部署，匯出 CSV/Parquet 為合約）· MCP server 為 P4/P5 加分。
 
@@ -77,4 +77,4 @@ docs/architecture/  docs/specs/  docs/plans/
 
 ## 卡住 / 要決策時
 
-架構層級的翻案或重大取捨 → 回報 Fergus（或規劃 Opus session）確認，不自行改動已鎖定決策（見 NORTH_STAR「已鎖定決策清單」）。
+架構層級的翻案或重大取捨 → 回報 Fergus 確認，不自行改動已鎖定決策（見 NORTH_STAR「已鎖定決策清單」）。一般階段內的設計問題，接手 session 自行照精確度契約收斂即可。
