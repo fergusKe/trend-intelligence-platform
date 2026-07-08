@@ -2,7 +2,7 @@
 
 > **狀態**：design 完成，待 Opus 寫 implementation plan。
 > **上游**：[`2026-07-08-P0-platform-foundation-brief.md`](2026-07-08-P0-platform-foundation-brief.md) + [`../architecture/NORTH_STAR.md`](../architecture/NORTH_STAR.md)。已鎖定決策（kind / ArgoCD app-of-apps / GitHub Actions+GHCR / kube-prometheus-stack / nginx-ingress）全部沿用，未翻案。
-> **版本查證日**：2026-07-08（以下版本 pin 皆當日對官方源查證，非記憶）。
+> **版本查證日**：2026-07-08（以下版本 pin 皆當日對官方源查證，非記憶）。**同日精確度收緊 pass 全數複驗**：kind / ArgoCD / 兩 Helm chart pin 不變；CI actions 與 hello 依賴升釘至查證 latest；§5 Grafana 密碼行為依 chart 87.10.1 實際 values 修正（舊版 `prom-operator` 公開預設已不存在）。
 
 ---
 
@@ -15,9 +15,10 @@
 | ArgoCD | **v3.4.4**，`https://raw.githubusercontent.com/argoproj/argo-cd/v3.4.4/manifests/install.yaml` | releases latest + URL 200 已驗 |
 | ingress-nginx Helm chart | **4.15.1**（= controller v1.15.1） | chart index.yaml 對照 appVersion |
 | kube-prometheus-stack Helm chart | **87.10.1** | prometheus-community releases |
-| hello service | Python 3.12 + FastAPI + `prometheus-fastapi-instrumentator` | — |
+| hello service 依賴 | Python 3.12 + FastAPI **0.139.0** + `prometheus-fastapi-instrumentator` **8.0.2** + uvicorn **0.50.2**；dev：pytest **9.1.1** / httpx **0.28.1** / ruff **0.15.20** | PyPI JSON API latest |
+| uv | **0.11.x**（Dockerfile base `ghcr.io/astral-sh/uv:0.11`；PyPI latest 0.11.28） | PyPI JSON API latest |
 
-CI actions pin：`actions/checkout@v5`、`astral-sh/setup-uv@v4`、`docker/setup-buildx-action@v3`、`docker/login-action@v3`、`docker/build-push-action@v6`。GitHub ubuntu-latest runner 內建 `yq`（改 manifest 用，不需額外安裝）。
+CI actions pin（皆 GitHub releases latest 已驗；major tag 浮動釘法）：`actions/checkout@v7`、`astral-sh/setup-uv@v8`（`python-version` input 已對 v8.3.1 的 action.yml 驗證存在）、`docker/setup-buildx-action@v4`、`docker/login-action@v4`、`docker/build-push-action@v7`。GitHub ubuntu-latest runner 內建 `yq`（**mikefarah Go 版 yq v4**，§4 的 `.images[0].newTag` 語法即它；改 manifest 用，不需額外安裝）。
 
 ---
 
@@ -107,6 +108,7 @@ nodes:
 ### Makefile（關鍵 target）
 
 ```makefile
+.PHONY: cluster-up cluster-down verify argocd-ui
 ARGOCD_VERSION := v3.4.4
 
 cluster-up:            ## 一鍵：叢集 → ArgoCD → root app（之後全靠 GitOps 收斂）
@@ -160,6 +162,7 @@ spec:
     repoURL: https://github.com/<GITHUB_OWNER>/trend-intelligence-platform   # ★ plan 前需實查：repo 尚未建 remote
     targetRevision: main
     path: platform/argocd/apps
+    directory: {recurse: false}     # 決策表明定（每檔一個子 Application，不掃子目錄）；顯式寫出
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
@@ -224,6 +227,8 @@ spec:
 
 sync-wave 標在子 Application metadata 上做**排序提示**；真正的健壯性靠每個 app 的 automated retry——特別是 hello 的 ServiceMonitor 依賴 wave 1 的 CRD，在 `servicemonitor.yaml` 資源上加 `argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true` 註解，讓 CRD 尚未就位時 dry-run 不炸、retry 收斂（這是官方建議的 CRD 先後解法）。
 
+**wave 編號全域方案（下游地基，禁改號）**：P0 佔用 **wave 0–2**；後續階段 design 接續往上配置（P1 已用 3–6、P2/P3 自 7 起）。新增元件只允許配新號碼，不重排既有號；同一 wave 內各 Application 無序（互不依賴才可同 wave）。
+
 ---
 
 ## 4. P0-3 GitHub Actions CI（決定）
@@ -261,8 +266,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v4
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v8
         with: {python-version: "3.12"}
       - run: uv sync
         working-directory: platform/hello
@@ -278,16 +283,16 @@ jobs:
       contents: write        # push bump commit
       packages: write        # push GHCR
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - id: tag
         run: echo "TAG=sha-$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: platform/hello
           push: true
@@ -305,7 +310,28 @@ jobs:
           git push origin main
 ```
 
-`pr-checks.yaml`：`on: pull_request` 同 paths（＋`k8s/**`），只跑 test job（lint+pytest），不 build 不 push。
+### `.github/workflows/pr-checks.yaml`（完整形狀——只跑 test，不 build 不 push）
+
+```yaml
+name: pr-checks
+on:
+  pull_request:
+    paths:
+      - "platform/hello/**"        # 含 k8s/**：manifest 改動也要過閘（與 hello-ci 的 paths 刻意不同）
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:                          # 與 hello-ci 的 test job 完全同構
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v8
+        with: {python-version: "3.12"}
+      - run: uv sync
+        working-directory: platform/hello
+      - run: uv run ruff check .
+        working-directory: platform/hello
+      - run: uv run pytest tests/ -v
+        working-directory: platform/hello
+```
 
 **GHCR 首推 gotcha（寫進 README runbook）**：public repo 首次推出的 GHCR package 預設仍是 **private** → kind 節點拉不動。一次性手動：GitHub → Packages → hello → Change visibility → Public。這是 P0 唯一的手動 UI 步驟；不做的替代（imagePullSecret）列附錄。
 
@@ -321,7 +347,7 @@ jobs:
 | ServiceMonitor 發現 | chart values 設 **`serviceMonitorSelectorNilUsesHelmValues: false`** + `serviceMonitorNamespaceSelector: {}` → Prometheus 撿**全叢集所有** ServiceMonitor，hello 的 ServiceMonitor 不必知道 helm release 名 | 預設行為只認帶 `release: monitoring` label 的 ServiceMonitor——服務側被迫耦合監控側的 release 名，醜。放開 selector 是官方 values 註解明載的用法。 |
 | Grafana dashboard 版本化 | **sidecar ConfigMap**（chart 預設開）：dashboard JSON 包成帶 `grafana_dashboard: "1"` label 的 ConfigMap，放 `platform/monitoring/dashboards/`，由獨立子 Application `monitoring-dashboards`（directory 型）sync | dashboard 進 git、改 dashboard = git diff（GitOps 故事完整）。塞 helm values 會讓 Application 檔爆長；Grafana UI 手做不進版控（淘汰）。獨立成第二個 app 是因為一個 Application 一個 source（helm chart 與 raw manifest 不混）。 |
 | 監控 storage | **emptyDir（chart 預設，storageSpec 不設）** | demo 叢集重建即重來，PVC 是假持久（kind 刪叢集照樣沒）；**刻意不寫 storageClassName**——這正是可攜約束，EKS 版在 README 給 storageSpec 範例。 |
-| Grafana 登入 | chart 預設 `admin/prom-operator`（公開預設值，非 secret），README 標注「僅本地 demo；雲上改 `admin.existingSecret`」 | 自訂密碼反而變成「git 裡的 secret」違反 §7。 |
+| Grafana 登入 | **不設 `adminPassword`（維持 chart 預設）**：87.10.1（grafana subchart 12.7.2）未設密碼時自動產 40 字隨機密碼存 Secret `monitoring-grafana`（模板 `lookup` 既有值，重 sync 不重生）；帳號 `admin`，密碼現場讀 `kubectl -n monitoring get secret monitoring-grafana -o jsonpath='{.data.admin-password}' \| base64 -d`（同 ArgoCD 初始密碼姿態，不落地）。README 標注「僅本地 demo；雲上改 `admin.existingSecret`」。⚠️ 查證更正：舊版 chart 的 `admin/prom-operator` 公開預設**已不存在**（87.10.1 values 中 `adminPassword` 為註解狀態，已對 chart 源碼驗證），文件與驗收一律走讀 Secret，不得引用 `prom-operator` | 自訂密碼反而變成「git 裡的 secret」違反 §7；隨機生成 + 現場讀取零 secret 姿態不變。 |
 
 ### 子 Application：monitoring（wave 1，關鍵 values）
 
@@ -367,13 +393,21 @@ spec:
 
 ### hello dashboard（`platform/monitoring/dashboards/hello-service-dashboard.yaml`）
 
-ConfigMap（namespace `monitoring`，label `grafana_dashboard: "1"`），data 內嵌 dashboard JSON。面板最小集（吃 `prometheus-fastapi-instrumentator` 的標準指標）：
+**monitoring-dashboards 子 Application 欄位**（補齊部署形狀）：directory 型，source `path: platform/monitoring/dashboards`（`directory: {recurse: false}`）、destination namespace `monitoring`、`sync-wave: "2"` annotation、sync policy 同 §3 標準（automated+prune+selfHeal+CreateNamespace+retry）。
+
+ConfigMap `hello-service-dashboard`（namespace `monitoring`，label `grafana_dashboard: "1"`；sidecar `searchNamespace` chart 預設 `ALL` 已驗，放 monitoring 是慣例非硬性），data 內嵌 dashboard JSON：
+
+- dashboard JSON `title` 固定為 **`Hello Service`**（§8 驗收第 6 步 `/api/search?query=Hello` 對準此字串）、`uid` 固定 `hello-service`（重載不換 id）。
+- **datasource 引用**：`{"type": "prometheus", "uid": "prometheus"}`——chart 內建預設 datasource `name: Prometheus, uid: prometheus`（87.10.1 values `grafana.sidecar.datasources.uid` 已驗），非慣例猜測。
+
+面板最小集（吃 `prometheus-fastapi-instrumentator` 8.x 的標準指標；label 集 = `handler`/`method`/`status`）：
 
 1. RPS：`sum(rate(http_requests_total{handler!~"/metrics|/healthz"}[5m]))`
 2. p95 延遲：`histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))`
-3. 4xx/5xx 率、4. `kube_pod_container_status_restarts_total{namespace="apps"}`（重啟數，來自 kube-state-metrics）
+3. 4xx/5xx 率：`sum(rate(http_requests_total{status=~"4..|5.."}[5m])) / sum(rate(http_requests_total[5m]))`
+4. 重啟數：`kube_pod_container_status_restarts_total{namespace="apps"}`（來自 kube-state-metrics）
 
-JSON 取材參考：`yt-trending-platform/monitoring/grafana/dashboards/pipeline-health.json`（同為 file-provisioned dashboard，改 datasource 為 chart 內建 Prometheus uid 慣例）。
+JSON 取材參考：`yt-trending-platform/monitoring/grafana/dashboards/pipeline-health.json`（同為 file-provisioned dashboard，datasource 改為上述 uid `prometheus`）。
 
 ---
 
@@ -400,8 +434,24 @@ JSON 取材參考：`yt-trending-platform/monitoring/grafana/dashboards/pipeline
   def healthz():
       return {"status": "ok"}
   ```
-- 測試（pytest + httpx TestClient）：`/healthz` 200 + body、`/metrics` 200 且含 `http_request`。
-- Dockerfile：`python:3.12-slim`、uv 裝依賴、non-root user、`uvicorn hello.main:app --host 0.0.0.0 --port 8000`。
+- `pyproject.toml`（版本 pin 見 §0；**`uv.lock` 一併 commit**，CI 與 Dockerfile 用 `--frozen`）：`[project] requires-python = ">=3.12"`，dependencies = fastapi / uvicorn / prometheus-fastapi-instrumentator；`[dependency-groups] dev` = pytest / httpx / ruff；src layout（build backend hatchling）。
+- 測試（pytest + `fastapi.testclient.TestClient`，兩支）：`test_healthz_returns_ok`（`/healthz` 200 + `{"status":"ok"}`）、`test_metrics_exposes_http_requests`（`/metrics` 200 且 body 含 `http_request`）。
+- Dockerfile（可照抄形狀）：
+
+  ```dockerfile
+  FROM python:3.12-slim
+  COPY --from=ghcr.io/astral-sh/uv:0.11 /uv /uvx /bin/
+  WORKDIR /app
+  ENV UV_COMPILE_BYTECODE=1 UV_NO_CACHE=1
+  COPY pyproject.toml uv.lock ./
+  RUN uv sync --frozen --no-install-project --no-dev
+  COPY src/ src/
+  RUN uv sync --frozen --no-dev
+  RUN useradd -u 1000 -m app
+  USER 1000        # 數字 UID：k8s runAsNonRoot 才驗得動（具名 USER 會 CreateContainerConfigError）
+  EXPOSE 8000
+  CMD ["uv", "run", "--no-sync", "uvicorn", "hello.main:app", "--host", "0.0.0.0", "--port", "8000"]
+  ```
 
 ### k8s manifests（kustomize）
 
@@ -417,7 +467,7 @@ images:
     newTag: sha-0000000   # 佔位；首次 CI run 會 bump 成真 tag
 ```
 
-- **deployment.yaml**：replicas 2（rolling update 可觀察）、`readinessProbe`/`livenessProbe` 都打 `/healthz`、resources requests `50m/64Mi` limits `200m/128Mi`、`securityContext: {runAsNonRoot: true}`。
+- **deployment.yaml**：replicas 2（rolling update 可觀察）；container `image` 必須逐字寫 `ghcr.io/<GITHUB_OWNER>/trend-intelligence-platform/hello:sha-0000000`（**name 部分與 kustomization `images.name` 完全一致，否則 `newTag` 改寫不生效**）；containerPort 8000 `name: http`；`readinessProbe`/`livenessProbe` 都打 `/healthz`（readiness `initialDelaySeconds: 3, periodSeconds: 5`；liveness `initialDelaySeconds: 10, periodSeconds: 10`）；resources requests `50m/64Mi` limits `200m/128Mi`；`securityContext: {runAsNonRoot: true, runAsUser: 1000}`（對齊 Dockerfile 的 UID 1000）。
 - **service.yaml**：ClusterIP，port 80 → targetPort 8000，port name `http`（ServiceMonitor 引用 port 名非數字）。
 - **servicemonitor.yaml**：`endpoints: [{port: http, path: /metrics, interval: 15s}]`；資源註解 `argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true`（§3 CRD 先後解法）。
 - **ingress.yaml**：`ingressClassName: nginx` + host `hello.localtest.me` + path `/` Prefix。**零 annotation**（可攜鐵律：不用任何 nginx/ALB 專屬註解；Abhishek 範本的 `alb.ingress.kubernetes.io/*` 即反例）。
@@ -432,7 +482,7 @@ source path `platform/hello/k8s`（ArgoCD 自動辨識 kustomize），destinatio
 
 ## 7. Secrets 姿態（硬約束③）
 
-**P0 設計成零 secret**：public repo（ArgoCD 匿名拉）＋ public GHCR image（節點匿名拉）＋ Grafana 用 chart 公開預設密碼 ＋ ArgoCD 初始密碼由叢集內自動生成（`make argocd-ui` 現場讀，不落地）。git 裡沒有任何憑證，也沒有「假裝是設定的密碼」。
+**P0 設計成零 secret**：public repo（ArgoCD 匿名拉）＋ public GHCR image（節點匿名拉）＋ Grafana 密碼由 chart 叢集內自動生成（隨機 40 字存 Secret `monitoring-grafana`，現場讀不落地，§5）＋ ArgoCD 初始密碼由叢集內自動生成（`make argocd-ui` 現場讀，不落地）。git 裡沒有任何憑證，也沒有「假裝是設定的密碼」。
 
 README 寫明**secret 邊界策略**：P1 起第一個真 secret（YouTube API key）出現時，用「命令式 `kubectl create secret`（文件化、不進 git）」起步，屆時再評估 sealed-secrets / external-secrets（P0 不預裝——一個工作一個工具，硬約束④）。
 
@@ -445,14 +495,14 @@ README 寫明**secret 邊界策略**：P1 起第一個真 secret（YouTube API k
 | # | 檢查 | 命令要點 | 預期 |
 |---|---|---|---|
 | 1 | 節點就緒 | `kubectl get nodes` | 3 節點 `Ready` |
-| 2 | ArgoCD apps 收斂 | `kubectl -n argocd get applications -o json` 輪詢（timeout 600s） | 5 個 app（root+4 子）全 `Synced` + `Healthy` |
+| 2 | ArgoCD apps 收斂 | `kubectl -n argocd get applications -o json` 每 10s 輪詢（timeout 600s）；jq 判準：`.items` 恰 5 筆且每筆 `.status.sync.status=="Synced" and .status.health.status=="Healthy"` | 5 個 app（root+4 子）全 `Synced` + `Healthy` |
 | 3 | hello 健康 | `curl -fsS http://hello.localtest.me/healthz` | HTTP 200，`{"status":"ok"}` |
 | 4 | hello 指標 | `curl -fsS http://hello.localtest.me/metrics` | 含 `http_requests_total` |
 | 5 | Prometheus 已 scrape | port-forward `svc/monitoring-kube-prometheus-prometheus 9090` → `/api/v1/query?query=up{namespace="apps"}` | 結果非空且 value=1 |
-| 6 | Grafana 起來＋dashboard 已載 | `curl -fsS http://grafana.localtest.me/api/health`；`/api/search?query=Hello`（basic auth 預設帳密） | health `ok`；search 命中 hello dashboard |
+| 6 | Grafana 起來＋dashboard 已載 | `curl -fsS http://grafana.localtest.me/api/health`（免認證）；`GRAFANA_PW=$(kubectl -n monitoring get secret monitoring-grafana -o jsonpath='{.data.admin-password}' \| base64 -d)` → `curl -fsS -u "admin:$GRAFANA_PW" "http://grafana.localtest.me/api/search?query=Hello"` | health `ok`；search 命中 title `Hello Service`（§5 固定 title） |
 | 7 | 部署 image 可回溯 | `kubectl -n apps get deploy hello -o jsonpath='{...image}'` | tag 形如 `sha-*` 且等於 kustomization.yaml 的 newTag |
 
-（第 5 步 svc 名依 release 名 `monitoring` 推得；plan 實作時以 `kubectl -n monitoring get svc` 實際名為準。）
+（第 5 步 svc 名 `monitoring-kube-prometheus-prometheus` 與第 6 步 Secret 名 `monitoring-grafana` 皆依 release 名 `monitoring` 推得；plan 實作時以 `kubectl -n monitoring get svc,secret` 實際名校準一次。）
 
 ### B. CI→GitOps 迴圈 runbook（文件化手動驗證，一次性）
 
@@ -486,7 +536,7 @@ README 寫明**secret 邊界策略**：P1 起第一個真 secret（YouTube API k
 
 1. **GitHub repo 尚未建立**（`git remote -v` 為空，2026-07-08 查證）：需先建 public repo 並 push，才有 root-app `repoURL`、CI、GHCR。design 中 `<GITHUB_OWNER>` 佔位符屆時代入。
 2. **GHCR package 首推後手動設 public**（§4 gotcha，一次性 UI 操作，寫進 plan 的 task 與 README）。
-3. verify.sh 第 5/6 步的 **監控 svc 實際名稱**（`monitoring-kube-prometheus-prometheus` 為 release 名推導，落地時 `kubectl -n monitoring get svc` 校準一次）。
+3. verify.sh 第 5/6 步的 **監控 svc 與 Grafana Secret 實際名稱**（`monitoring-kube-prometheus-prometheus` / `monitoring-grafana` 皆為 release 名推導，落地時 `kubectl -n monitoring get svc,secret` 校準一次；預設傾向 = 推導名正確）。
 4. 本機 **80/443 端口占用檢查**（被佔則 kind-cluster.yaml 改 8080/8443，檔內已註解）。
 
 以上皆為環境前置或落地校準，無未收斂的設計決策。
@@ -498,3 +548,4 @@ README 寫明**secret 邊界策略**：P1 起第一個真 secret（YouTube API k
 - 五簇開放問題全部收斂為決定（§2–§6 各簇決策表）；已鎖定決策零翻案。
 - 硬約束對照：①宣告式界線 §3（命令式僅 bootstrap 三步）②可攜 §9 ③零 secret §7 ④P0 未引入 Airflow/Postgres/sealed-secrets 等任何超綱工具 ⑤`make cluster-up` §2 ⑥CI 測試 §4 + 驗收 §8。
 - 對參考素材的「進化方向」：Abhishek sed→kustomize+yq、DockerHub PAT→GHCR GITHUB_TOKEN、ALB 註解→零註解 ingress、run_id tag→git sha tag；yt-trending 靜態 prometheus.yml→ServiceMonitor CRD 動態發現。
+- **精確度收緊 pass（2026-07-08，對照 CLAUDE.md 八條契約）**：版本 pin 全數對官方源複驗（kind v0.32.0 / ArgoCD v3.4.4 / ingress-nginx 4.15.1 / kube-prometheus-stack 87.10.1 不變且皆為當日 latest；CI actions 升釘 checkout@v7 / setup-uv@v8 / buildx@v4 / login@v4 / build-push@v7；hello 依賴 + uv 補釘）；**Grafana 密碼行為修正**（87.10.1 已無 `prom-operator` 公開預設 → 隨機 Secret `monitoring-grafana` 現場讀，§5/§7/§8 同步改，零 secret 姿態不變）；Dockerfile / pyproject / pr-checks / deployment probe / dashboard PromQL+uid / verify jq 判準補到可照抄。**錨點零變動**：章節編號、sync-wave 0–2、目錄佈局、介面命名全部原樣（P1/P2/P3/P1-comments 引用不斷）。
