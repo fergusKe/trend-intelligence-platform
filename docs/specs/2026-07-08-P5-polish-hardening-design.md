@@ -46,7 +46,7 @@ P5 = 四簇：①CI 安全掃描（§2）②架構圖（§3）③面試敘事（
 
 | 問題 | 決定 | 理由 / 淘汰方案 |
 |---|---|---|
-| 選哪幾個工具 | **Trivy（image 弱點 + config 誤設定，一工具兩模式）＋ gitleaks（secret，git 全史）＋ CodeQL（SAST，`python` + `javascript-typescript` 兩語言）**；另在 repo Settings 開 GitHub 原生 **secret scanning + push protection** 與 **Dependabot alerts**（一次性設定，深度防禦，非 CI gate） | 覆蓋四類：依賴/OS 弱點、IaC 誤設定、secret、程式碼缺陷。淘汰：Semgrep（與 CodeQL 職能重疊）、kube-linter（Trivy config 已掃 k8s manifest，不為同一工作加第二工具）、SonarQube（常駐服務）、npm audit CI step（frontend 依賴弱點由 Dependabot alerts + CodeQL JS 覆蓋，audit 噪音高） |
+| 選哪幾個工具 | **Trivy（image 弱點 + config 誤設定，一工具兩模式）＋ gitleaks（secret，git 全史）＋ CodeQL（SAST，`python` + `javascript-typescript` 兩語言）**；另在 repo Settings 開 GitHub 原生 **secret scanning + push protection** 與 **Dependabot alerts**（一次性設定，深度防禦，非 CI gate） | 覆蓋四類：依賴/OS 弱點、IaC 誤設定、secret、程式碼缺陷。淘汰：Semgrep（與 CodeQL 職能重疊）、kube-linter（Trivy config 已掃 k8s manifest，不為同一工作加第二工具）、npm audit CI step（frontend 依賴弱點由 Dependabot alerts + CodeQL JS 覆蓋，audit 噪音高）。**SonarQube（重點淘汰理由，面試會問，見 §4.3 #17）＝類別錯位**：它是「程式碼品質平台（quality gate + code smell + 覆蓋率 + 部分 SAST）」，主要與 CodeQL 的 SAST 職能**重疊**，卻**不掃 container image 的 CVE**（本專案主軸正是「build image → GHCR → k8s」，image 掃描是最對題的成熟度訊號）、secret 偵測弱於 gitleaks、依賴弱點（SCA）在 SonarQube 屬**付費商業版**；且自架＝**又一個常駐服務**（server + DB），違「一個工作一個工具 + 免費/OSS + 不多養常駐服務」。三隻互補、零常駐、對 public repo 全免費，恰好覆蓋 SonarQube 不做的 image/secret/SCA 三塊 |
 | 掛在哪 | **四個掛載點**（§2.2 總表）：①每服務 CI 的 **push 之後、bump 之前**掃 image ②repo 級 workflow 掃 secret/SAST/manifest（push main + PR）③**weekly 排程**全量重掃 ④PR 上 pr-checks 原樣不動（服務級 lint/test），repo 級掃描各自帶 `pull_request` 觸發 | image gate 卡在 **GitOps 交棒點**：image 可進 GHCR（tag 可回溯、build cache 不浪費、不用把 build-push-action 拆兩段），但 **CRITICAL 沒清就不 bump manifest = 不進叢集**。這比「擋 registry」更準確地保護了真正的邊界（部署由 manifest 決定）。weekly 重掃是因為 CVE 時變——build 時乾淨 ≠ 永遠乾淨 |
 | gate 政策 | **分級**（§2.3 總表）：secret = **零容忍**（任一 finding 即 fail）；image/manifest = **CRITICAL（有修復版）擋、HIGH 只報告**；CodeQL = PR check 對新增 high+ alert 亮紅、push 走 Security tab 報告；weekly = 紅燈當巡檢警報（無 merge 可擋） | 照 brief 傾向落地並補分級論證：secret 一旦進 git 史就是永久事故，嚴格度應最高；CVE 有誤報與不可修（unfixed）常態，全擋會把 gate 訓練成「大家習慣紅燈」——分級才是務實 gate 的面試敘事點 |
 | 掃描結果去哪 | **GitHub Security tab（code scanning）為主匯流**：Trivy 兩模式 SARIF 經 `codeql-action/upload-sarif@v4` 上傳（帶 category 區分）、CodeQL 原生；gitleaks 走 action 原生 job summary + SARIF artifact（不上 Security tab，action 不支援且 summary 已夠用） | public repo 的 code scanning 免費；單一入口看全部 findings 是 DevOps 成熟度訊號 |
@@ -336,6 +336,7 @@ flowchart LR
 | 14 | 去識別在 Bronze 落地前的 ingest 邊界（作者欄位遮蔽） | P1-留言 design §1② | DE |
 | 15 | 安全 gate 分級：secret 零容忍／CRITICAL 擋 GitOps 交棒點／HIGH 報告／weekly 巡檢 | 本 design §2.3 | DEVOPS |
 | 16 | 監控 emptyDir 不假持久；Airflow KubernetesExecutor；Iceberg JDBC catalog on 共用 Postgres | P0 §5、P1 §1 | DEVOPS、DE |
+| 17 | 資安三隻互補（Trivy image/config＋gitleaks secret＋CodeQL SAST）而非 SonarQube——SonarQube 類別錯位（品質平台，與 CodeQL 重疊卻不掃 image CVE、弱 secret、SCA 付費、要常駐服務）；分「掃描四類別（image/IaC/secret/程式碼）」比堆一個品牌更能展示 DevSecOps 認知 | 本 design §2.1、§0 費用確認 | DEVOPS |
 
 （各 JD 檔從中選 5 條深講，其餘在對照表帶過；plan 不需再考證出處。）
 
