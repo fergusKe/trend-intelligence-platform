@@ -58,13 +58,14 @@ YouTube 是唯一「一個題材餵滿三塊」的來源，且資料每小時更
 | 串流（選配） | Kafka（要用才加） | P1/後期 |
 | ML 生命週期（tabular） | **DVC**（資料版本）→ **MLflow**（追蹤+Registry, Staging→Prod）→ **KServe**（k8s serving）→ Airflow 重訓 + drift 監控 | P2 |
 | ML 生命週期（LLMOps） | 向量庫（Qdrant/pgvector）+ RAG pipeline + prompt/版本管理 + 評估閘 + 成本/延遲監控 | P2 |
-| 收尾加分 | 安全掃描（Trivy/SonarQube，課程缺口）, 架構圖, 面試敘事 | P4 |
+| 呈現層（對外） | **Next.js**（讀匯出資料、部署 **Vercel**）；平台端 Gold→CSV/Parquet 匯出 DAG | P4 |
+| 收尾加分 | 安全掃描（Trivy/SonarQube，課程缺口）, 架構圖, 面試敘事 | P5 |
 
 **刻意省略以避免過度工程**：Kubeflow、Feast、Seldon、Terraform、service mesh、多雲、ClickHouse、多套排程器。
 
 ---
 
-## 分階段藍圖（P0–P4，每階段一份 spec）
+## 分階段藍圖（P0–P5，每階段一份 spec）
 
 | 階段 | 目錄 | 內容 | 打哪種 JD | 獨立可 demo |
 |---|---|---|---|---|
@@ -72,9 +73,19 @@ YouTube 是唯一「一個題材餵滿三塊」的來源，且資料每小時更
 | **P1 資料管線** | `ingestion/` `lakehouse/` `orchestration/` | YouTube API ingest → MinIO/Iceberg Bronze → Spark Silver → dbt Gold(Postgres) → Airflow 編排 + dbt DQ 測試 | 資料工程師 | ✅ 完整 lakehouse |
 | **P2 兩條 ML 垂直** | `ml/` | **(a) tabular**：DVC→MLflow→KServe→drift/重訓（影片表現預測，取材 youtube-analytics 的 RandomForest）。**(b) LLMOps**：RAG over YouTube 文字 + prompt 版本 + 評估 + 成本監控（取材 youtube-analytics 的 Qdrant/RAG） | MLOps / LLMOps | ✅ 完整模型生命週期 |
 | **P3 進階 ingest** | `ingestion/` | PTT 分散式爬蟲當第二來源（取材 ptt-crawler 的 Celery 可靠性），可選加 Kafka 串流 | 差異化（爬蟲硬實力） | ✅ |
-| **P4 收尾** | 全域 | CI 補安全掃描、架構圖、README 打磨、面試敘事 | 全部 | — |
+| **P4 呈現層** | `frontend/` + `orchestration/`（匯出 DAG） | Next.js 儀表板讀「Gold/ML 匯出資料」→ **部署 Vercel**（唯一對外可見產物）；平台端加 Gold→匯出（CSV/Parquet）步。**平台本身不部署**（本地 kind 按需跑） | 前端/全端 + 展示整體 | ✅ 公開網址 |
+| **P5 收尾** | 全域 | CI 補安全掃描、架構圖、README 打磨、面試敘事 | 全部 | — |
 
-**建置順序**：P0 必須先做（其他都跑在它上面）。P1 → P2 → P3 依序。P2 的 (a)(b) 兩條可並行或分兩份 sub-spec。
+**建置順序**：P0 必須先做（其他都跑在它上面）。P1 → P2 → P3 依序；P4 呈現層吃 P1 Gold + P2 ML 匯出（可在 P2 後做）；P5 收尾最後。P2 的 (a)(b) 兩條可並行或分兩份 sub-spec。
+
+### 呈現層與部署拓撲（P4；2026-07-08 定案）
+
+**問題**：平台跑在本地 k8s，別人看不到；只給 repo 不夠有說服力。**決策**：
+- **平台不上雲**（求職展示不值得常駐雲成本）→ 本地 kind 按需 `make cluster-up` 跑，用**截圖/GIF/架構圖**佐證「真的會操作 k8s/GitOps/監控」。
+- **前端上雲**：`frontend/`（Next.js）**部署 Vercel**，是唯一對外公開、可點連結的產物——「示範網站 + 背後架構」一次講完。
+- **合約邊界 = 匯出資料檔**：平台端一支 Airflow DAG 把 Gold marts（＋P2 ML 輸出）匯出成 **CSV/Parquet**，前端純讀該檔渲染（JAMstack「預先算好資料 → 靜態呈現」範式，公開資料儀表板常態）。前端對平台的唯一依賴＝這包檔的 schema。
+- **monorepo 不拆 repo**：前端住同一 repo 的 `frontend/` 子目錄（自成一體、獨立部署），一個連結講完整條龍、不重演「散落多 repo」問題；Vercel 設 root dir = `frontend/` 原生支援子目錄部署。**不用 Streamlit**（分析與呈現統一 Next.js）。
+- 匯出目標（committed 靜態檔 vs 免費 Neon serving DB vs 物件儲存）由 P4 spec 收斂。
 
 ---
 
@@ -103,7 +114,8 @@ YouTube 是唯一「一個題材餵滿三塊」的來源，且資料每小時更
 - ✅ 執行環境 = **本地 k8s**（kind/k3d/minikube，零雲端成本）。
 - ✅ 排程只 Airflow / DB 只 Postgres / 監控只 Prom+Grafana / 串流要用才加 Kafka / **砍 ClickHouse**。
 - ✅ 名稱 = `trend-intelligence-platform`（直白描述型）。
-- ✅ 交付 = P0–P4 五階段、各一份 spec、疊上去。
+- ✅ 交付 = P0–P5 六階段、各一份 spec、疊上去。
+- ✅ **呈現/部署拓撲（2026-07-08 定案）**：**monorepo**（前端住 `frontend/` 自成一體子目錄，不拆 repo）；**平台不部署**（本地 kind 按需跑 + 截圖/GIF 佐證）；**前端 Next.js 部署 Vercel**（root dir=`frontend/`），唯一對外公開產物；平台↔前端以**匯出資料檔（CSV/Parquet）為合約邊界**；**不用 Streamlit**（分析＋呈現統一 Next.js）。細節見上「呈現層與部署拓撲」段。
 
 ---
 
@@ -113,4 +125,4 @@ YouTube 是唯一「一個題材餵滿三塊」的來源，且資料每小時更
 2. **Fable 5** 讀階段 brief/北極星 → 出 `docs/specs/<date>-P<n>-<topic>-design.md`。
 3. **執行 session** 讀 plan 逐 task 實作（TDD、頻繁 commit）。
 
-**下一步**：P0（平台底座）出 spec。
+**下一步**：P2（兩條 ML 垂直）出 spec（P0/P1 design 已完成；P4 呈現層拓撲已定案，待 P2 後接）。
