@@ -32,11 +32,13 @@
 
 ## 說明式內容 registry schema（跨全站硬性；本 crosscut 的核心產出，對標並超越 ga-insight）
 
+> **Fergus 加碼定案（2026-07-10，硬性、阻擋級）**：**每一個功能／每一頁都必須像 ga-insight 那樣把「開發目的（我們為什麼做這個）＋這個功能有什麼（做什麼、怎麼用）」寫到完整**，讓使用者一看就懂。這**不是只 GA 支柱**——四支柱（搜尋／GA／趨勢智能／平台架構）每一頁一律適用，無例外。schema 必含**目的敘述**（`whyBuilt`：這個功能存在的理由／解決什麼）與**功能說明**（`whatItDoes`：這頁提供哪些能力、輸入輸出、怎麼操作），與下方問句式欄位並存。**驗收升為阻擋級**：任何頁面缺 registry 條目或缺 `whyBuilt`/`whatItDoes` = coverage gate 失敗、不得 ship。
+
 - **現況**：既有「說明式 UI 三層元件」（InfoTooltip/ChartCaption/Explainer，正典路徑 `frontend/src/components/explainers/`，見 NORTH_STAR 說明式 UI 段）＝**容器**；但**內容散在各頁 inline**（Signal design §6 只定視覺）。
 - **ga-insight 的模式（唯讀接地，`src/components/ui_utils.py:23-52` `render_page_header`）**：每頁 5 欄 `{chapter, title(問句), description(怎麼看), can_do(gain), problem(pain)}` + inline `help=`/`caption` 的公式+實例。**弱點**：文案 inline、無集中 registry、無 formula/dataSource/caveats 一級欄位、無 AI-vs-程式的結構化標註。
-- **本站超越法（Fable 5 要設計）**：把說明升為**集中式 registry**（keyed by feature/page/chart id），schema 至少含：`{ pillar, chapter, questionTitle, howToRead, canDo, problem, formula?, dataSource, caveats?, aiVsComputed }`（`aiVsComputed` 明標「此區塊數字由程式算 / 敘事由 AI 生」——對齊 ga-insight guardrail `src/agents/guardrails.py:275-301` 的誠實精神，且升為 schema 一級）。
+- **本站超越法（Fable 5 要設計）**：把說明升為**集中式 registry**（keyed by feature/page/chart id），schema 至少含：`{ pillar, chapter, questionTitle, whyBuilt, whatItDoes, howToRead, canDo, problem, formula?, dataSource, caveats?, aiVsComputed }`（`whyBuilt`＝開發目的、`whatItDoes`＝功能做什麼／怎麼用，二者為硬性一級欄位，不可省）（`aiVsComputed` 明標「此區塊數字由程式算 / 敘事由 AI 生」——對齊 ga-insight guardrail `src/agents/guardrails.py:275-301` 的誠實精神，且升為 schema 一級）。
   - **Fable 5 要拍板**：registry 存哪（TS/JSON/MDX？keyed 結構）、如何餵三層元件（元件從容器變 registry-driven，可能需擴 Explainer props——與 Signal design §6 銜接，若需擴 props 明列，因兩者皆未實作、plan 期一次落地零重工）、跨兩 app（frontend/admin）如何共享（沿 Signal §2.4 token 複製+CI diff 的同構作法 or 其他）。
-  - **驗收**：每支柱每頁/每圖能從 registry 取到結構化說明；AI 區與程式區可區分；schema 覆蓋率有守門（如 coverage gate 掃頁面斷言都有 registry 條目）。
+  - **驗收（阻擋級）**：每支柱每頁/每圖能從 registry 取到結構化說明，且**每頁必備 `whyBuilt`+`whatItDoes`**（缺任一 = gate fail）；AI 區與程式區可區分；coverage gate 掃全站頁面斷言都有 registry 條目、無孤兒頁。
 
 ## 📊 GA 支柱的 AI 大腦：agentic 分析問答（問 AI）——實碼接地 + 進化方向
 
