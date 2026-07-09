@@ -33,7 +33,7 @@
 | 8 | coverage gate 實作 | **vitest 守門測試**（glob `src/app/**/page.tsx` → route 推導 → 雙向斷言 registry 條目/硬性欄位/PageHeader 接線/無孤兒）＋ grep 禁裸用元件，**進 frontend-ci / admin-ci 阻擋級**（§5.5） | 「每頁必有完整說明」是 Fergus 阻擋級定案——只有列舉式掃描能保證無漏網；反例可實跑（刪一欄 = CI 紅） |
 | 9 | 問 AI 與 P2b 關係 | **複用 P2b LLM 基建**（LLMClient Ollama/Gemini 切換、prompt registry、評估閘、成本/延遲 Prometheus）**擴一個新 LangGraph graph**，不獨立起爐灶（§6.2） | 一套 LLMOps 治理管兩種 agent 範式（檢索型 CRAG＋分析型 orchestrator-worker）本身就是履歷亮點；重造 = 違「agent 框架只 LangGraph」與複用紀律 |
 | 10 | 問 AI 範圍歸屬 | **獨立一份「問 AI agentic 分析問答」spec**（非 GA 支柱 spec 章節），建置序在 GA 支柱 spec 之後（§6.5/§9） | 六節點 graph＋兩層 AI＋P2b 接線＋showcase 產線份量足；GA 支柱 spec 已扛分析引擎＋datasets＋頁面，再塞會超載 |
-| 11 | live-demo 外連 v1 配置 | **v1 只有搜尋支柱掛 live-demo**（ptt-search 既有 Vercel+CloudRun+Bonsai 部署）；問 AI live 外連 **gated、由問 AI spec 拍板部署形態**（預設傾向 Cloud Run min-instances=0＋前置 input guardrail＋日成本上限），v1 以策展 trace＋GIF＋本地實跑佐證（§7.2） | 搜尋的 live demo 已存在零成本；問 AI live = 公網常駐 LLM 端點（prompt-injection 面＋API 成本），不該由 crosscut 順手拍板上線 |
+| 11 | live-demo 外連 v1 配置 | **搜尋支柱 ✅**（ptt-search 既有部署）＋**問 AI 支柱 ✅ v1 就上 live-demo（Fergus 2026-07-10 定案：功能完整優先、成本不設限；per-day 執行次數上限列 follow-up 補）**。問 AI live-demo＝獨立部署端點（傾向 Cloud Run＋前置 input guardrail＋誠實標「獨立部署」），站上仍策展 trace＋架構圖＋MCP 並存；部署形態細節由問 AI spec 拍板落地 | Fergus 定案：現階段重點是功能完整，先把 live 問 AI demo 上起來（真跑 LangGraph agent），rate-limit 之後補。**靜態站本身仍零 live LLM**——live-demo 是外連的獨立端點，不破純靜態拓撲 |
 | 12 | GA 支柱資料流合約邊界 | **走既有 `export_frontend_data` DAG additive**：分析引擎平台端批次 → `gold.gold_ga4_insight_*`（additive marts，不改地基 4 表）→ exporter `datasets.py` 加條目 → `ga_insight_*.json`（P4 信封同構）→ 前端純讀；absent 容忍沿 P4（§7.3） | P4 §4 穩定性政策本就允許加檔；零新資料通道、零新部署，GA 支柱與其他 18 檔喝同一口井 |
 | 13 | 檔名/命名空間保留 | dataset 前綴：GA 支柱 `ga_insight_`、搜尋支柱 `search_`、問 AI `ga_ask_`；Gold 前綴 `gold.gold_ga4_insight_*`；dbt tag `ga4_insight`（EP-D append 紀律） | 先佔命名空間防撞（既有 `ga4_realtime_correctness.json` 已用掉 `ga4_` 語感——GA 支柱不用 `ga4_` 前綴避免混淆） |
 | 14 | ⌘K 全站搜 vs 搜尋支柱 | **兩個不同東西，明文釘死**：⌘K（Signal §7）＝全站導航式快速搜，跨四支柱、原樣不動；`/search` 支柱＝搜尋**工程展示**（ES 敘事＋live-demo＋離線示範）（§2.3） | Signal §13 Opus 註記已預告此邊界，本檔落成契約 |
@@ -275,7 +275,7 @@ ga-insight graph（`graph.py:462-493`）：input guardrail（12 條 prompt-injec
 
 ### 6.4 拓撲落法（Option A，鐵律內）
 
-- **站上零 live LLM 呼叫**。呈現四件套：策展 Q&A（預產靜態 JSON，沿 `rag_showcase` 模式）＋架構圖＋MCP 工具（`get_ga_ask_showcase`，docstring 明講「離線批次預產、非即時推理」，沿 P4 §7 誠實紀律）＋ **live-demo 外連 gated**（決策 11：預設 off，問 AI spec 拍板；預設傾向 Cloud Run min-instances=0＋input guardrail 前置＋rate-limit＋日成本上限＋誠實標「獨立部署」）。
+- **站上零 live LLM 呼叫**。呈現四件套：策展 Q&A（預產靜態 JSON，沿 `rag_showcase` 模式）＋架構圖＋MCP 工具（`get_ga_ask_showcase`，docstring 明講「離線批次預產、非即時推理」，沿 P4 §7 誠實紀律）＋ **live-demo 外連 v1 就上**（決策 11，Fergus 2026-07-10 定案：功能完整優先、成本不設限，per-day 執行次數上限列 follow-up）——獨立部署端點（傾向 Cloud Run＋input guardrail 前置＋誠實標「獨立部署」），問 AI spec 拍板部署細節。**注意此為外連的獨立端點跑 live agent；靜態站本身仍零 live LLM。**
 - **`ga_ask_showcase.json` 信封＝P4 統一信封；rows 骨架（本檔保留欄，問 AI spec 只准 additive 擴）**：`{ scope: 'global'|'page:<pageId>', question, answer, agents_called: string[], reflection_rounds: number, guardrail: { input_passed: boolean, output_flags: string[] }, confidence: number, provider, latency_ms, token_usage, generated_at }`。產線＝平台端批次（host 跑完整 graph，Ollama 零成本，沿 P6 `make gen-reco-reasons` 慣例），結果落 `ml.ga_ask_showcase` 表 → exporter additive 條目。
 - **進化清單裁定**（brief 列的四項）：✅ 納入問 AI spec v1——guardrail/reflection 指標進 Prometheus、reflection 收斂條件嚴謹化（sufficiency 明確評分＋停止條件）、逐節點 trace 持久化與前端揭露；⏭ 列進化方向不做 v1——六專家 tool 開成 MCP 共用工具層（MCP 讀靜態 JSON 與 agent 讀 Gold 是兩個資料面，共層需先統一，收益後置）、跨支柱問答（問趨勢/PTT 資料）。
 
@@ -295,7 +295,7 @@ ga-insight graph（`graph.py:462-493`）：input guardrail（12 條 prompt-injec
 
 - **落點**：支柱首頁一張 `LiveDemoCard`（§5.3）＋ `/architecture` 整合模式卡內一行；**不放進 sidebar/topbar**（外連不是站內導航，混入 nav 會誤導拓撲認知）。
 - **誠實句式（固定，不得改寫弱化）**：「此連結開啟另一個獨立部署（{deployment}）；本站為純靜態展示，不依賴該服務。」外連一律 `target="_blank" rel="noopener noreferrer"`＋lucide `ExternalLink` icon＋顯示目標 hostname。
-- **v1 配置**：搜尋支柱 ✅（ptt-search 既有部署，URL plan 期實查回填 `pillars.ts`）；GA/問 AI ⏸ gated（§6.4）；趨勢智能/平台架構 ✖（本體就是本站＋叢集，無外連對象）。
+- **v1 配置**：搜尋支柱 ✅（ptt-search 既有部署，URL plan 期實查回填 `pillars.ts`）；**問 AI 支柱 ✅ v1 就上**（Fergus 2026-07-10 定案；獨立 Cloud Run 端點跑 live LangGraph agent，per-day rate-limit follow-up，§6.4）；GA 支柱分析頁 ⏸（gated，GA 支柱 spec 評估是否需 live 運算外連，預設策展 JSON 足）；趨勢智能/平台架構 ✖（本體就是本站＋叢集，無外連對象）。
 
 ### 7.3 GA 支柱資料流骨架（合約邊界；細節 dataset/引擎 → GA 支柱 spec）
 
@@ -426,7 +426,7 @@ live-demo 部署來源（§7.2）；唯讀取材搜尋 UX 敘事與 Signal §4.3
 **對 §14 四風險點的處置**：
 1. **`/architecture` 支柱歸屬**：Opus 認同 Fable 5 裁定（architecture 頁＝平台架構支柱首頁、趨勢智能 nav 列 10 頁；「11 頁全數保留」讀作 route/內容合約不動非 nav 雙掛）——語意合理且雙掛違「當前支柱唯一標示」原則。一行 `pillars.ts` 可回退，列為向 Fergus 報告的確認點、非阻擋。
 2. **麵包屑移除**：認可。Signal §13（Opus 前次註記）已預告頂層 nav 會被四支柱切換取代，本檔落成；兩層 nav＋頁深 ≤2 下麵包屑確為冗餘。
-3. **問 AI live-demo gated**：認同下放問 AI spec 拍板＋預設 Cloud Run scale-to-zero。此為真正的成本/資安 vs 作品集亮點取捨，但**現階段 spec-only、問 AI spec 尚未寫**，Fable 5 的 gated 預設不 foreclose 任何選項 → 留到問 AI spec 時由 Fergus 拍板，本檔不必先鎖。列報告知會點。
+3. **問 AI live-demo → Fergus 2026-07-10 已拍板：v1 就上**（功能完整優先、成本不設限，per-day 執行次數上限列 follow-up）。決策 11／§6.4／§7.2 已同步翻正。問 AI spec 須把「部署 live 端點跑真 LangGraph agent」列為 v1 必做（非 gated）；守拓撲＝**外連獨立端點跑 live agent、靜態站本身仍零 live LLM**，前置 input guardrail 與誠實「獨立部署」標保留。rate-limit 為 v1 後 follow-up（問 AI spec 註記，不阻擋 v1）。
 4. **admin 第五 pillar 值**：認可（同構逐字節 diff 的必然代價，替代案更糟）。
 
 **無需改檔**：以上皆判斷認可或屬報告知會層級，design 本體不動。後續 spec 序照 §9 執行。
