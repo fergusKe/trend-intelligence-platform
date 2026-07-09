@@ -39,6 +39,9 @@ mlruns/
 .kube/
 kubeconfig*
 
+# AI 工具腳手架（本機 skill，非專案交付物；本 repo 哲學＝skill 走全域 plugin 不 vendoring，見 CLAUDE.md）
+.claude/
+
 # OS / IDE
 .DS_Store
 .idea/
