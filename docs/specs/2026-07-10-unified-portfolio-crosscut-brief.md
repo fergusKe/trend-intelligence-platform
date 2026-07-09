@@ -38,6 +38,28 @@
   - **Fable 5 要拍板**：registry 存哪（TS/JSON/MDX？keyed 結構）、如何餵三層元件（元件從容器變 registry-driven，可能需擴 Explainer props——與 Signal design §6 銜接，若需擴 props 明列，因兩者皆未實作、plan 期一次落地零重工）、跨兩 app（frontend/admin）如何共享（沿 Signal §2.4 token 複製+CI diff 的同構作法 or 其他）。
   - **驗收**：每支柱每頁/每圖能從 registry 取到結構化說明；AI 區與程式區可區分；schema 覆蓋率有守門（如 coverage gate 掃頁面斷言都有 registry 條目）。
 
+## 📊 GA 支柱的 AI 大腦：agentic 分析問答（問 AI）——實碼接地 + 進化方向
+
+> Fergus 明示：「問 AI」不是單純問答，**每頁都能問 AI（頁範圍輕量）＋ 一個獨立「問 AI」頁（完整多 agent）**，用 **LangGraph 多 agent + GUARDRAIL + REFLECTION**。這是 GA 支柱的 LLMOps 核心亮點，Fable 5 必須把它設計進來（**進化非複刻**——參考實碼、規劃我方更好版本）。
+
+**ga-insight 實碼架構（規劃者已第一手讀碼接地，`llm-workshop/ga-insight/src/agents/`）**：LangGraph `StateGraph`（`graph.py:460-493`）六節點——
+1. **input guardrail**（`graph.py:107`／`guardrails.py`）：業務相關性關鍵字 + **12 條 prompt-injection pattern**（`guardrails.py:31-44`）+ 日期範圍 → 不合法即 `end_rejected`。
+2. **orchestrator**（`graph.py:122`）：LLM 動態選 **1-4 個** sub-agent（六專家：traffic/customer/product/funnel/anomaly/risk），規則提示 + fallback；亦處理 reflection 的補呼叫。
+3. **run_sub_agents**（`graph.py:190`）：`ThreadPoolExecutor(max_workers=4)` **並行**、每 agent 120s timeout、錯誤隔離；每個 sub-agent 有自己的 `tools/` 模組、回 `SubAgentResult{key_findings, analysis, confidence, hit_limit, tool_results}`。
+4. **reflection**（`graph.py:240`）：LLM 判 **sufficiency / gaps / conflicts**，從未呼叫者補選 ≤2 agent，`MAX_REFLECTION_ROUNDS` 上限 → 迴圈回 orchestrator 或進 synthesis（`edge_after_reflection:419`）。
+5. **synthesis**（`graph.py:306`）：結論先 / 分析脈絡 / 交叉驗證 / **信心加權**（confidence<0.6 或 data_incomplete 加註）/ **誠實標數據缺口**（📌 分析限制）。
+6. **output guardrail**（`graph.py:386`／`guardrails.py`）：PII 偵測（email/手機/信用卡）+ **反幻覺數字檢核**（答案中每個數字須能在 `tool_results` 找到根據，否則 flag/重試 synthesis，`edge_after_output_guardrail:431`）。
+
+**與既有 P2b 的關係（Fable 5 要釐清，不重造）**：P2b（NORTH_STAR「P2b LLMOps/RAG」）是 **agentic RAG + CRAG over 留言文字**（檢索型）；問 AI 是 **tool-calling 分析型 orchestrator-worker over 結構化 GA 數據**（不同 agent pattern）。兩者**互補**、都是 LLMOps 展示。Fable 5 要決定：問 AI 是**沿用 P2b 的 LangGraph/LLM 基礎設施**（同一套 LLMClient/Ollama-Gemini 可切/評估閘/成本監控）擴一個新 graph，還是獨立——**傾向前者**（複用不重造，一套 LLMOps 治理兩種 agent）。
+
+**兩層 AI（Fable 5 設計）**：(a)**每頁問 AI**＝頁範圍輕量（單 agent/單領域，如 ga-insight 各頁 🤖 區）；(b)**獨立問 AI 頁**＝完整多 agent（上述六節點 graph，跨領域）。
+
+**拓撲落法（守 Option A）**：問 AI 是 live LLM/tool 呼叫，公開靜態站**不能即時跑** → 站上呈現 = **策展 Q&A 範例（預產靜態 JSON，沿 P4 `rag_showcase` 模式）+ 多 agent 架構圖（即你給的架構圖，說明式呈現）+ MCP 工具（遠端 Claude 可實查）+ 選配 live-demo 外連**（問 AI 是最值得配 live-demo 的亮點）。**誠實標**「此為離線批次產生的範例／架構在叢集內」（沿既有誠實紀律 + ga-insight guardrail 精神）。
+
+**進化方向（做得比 ga-insight 更好，Fable 5 規劃）**：可考慮——用 MCP 把六專家的 tool 開成標準工具（agent 與 MCP 共用工具層）、guardrail/reflection 指標進 Prometheus（LLMOps 可觀測性，ga-insight 無）、reflection 收斂條件更嚴謹、跨支柱問答（不只 GA、也能問趨勢/PTT 資料）。**Fable 5 判斷哪些納入本輪、哪些列後續。**
+
+**範圍歸屬（本 crosscut 裁定）**：問 AI 多 agent 系統夠份量，**傾向獨立一份「agentic 分析問答」spec**（或 GA 支柱 spec 的主要章節）——crosscut 記錄接地與方向、裁定它與 P2b/GA 支柱的邊界，細設下放該 spec。
+
 ## 整合模式（已鎖定，Fergus 拍板）＝統一靜態站 + 選配 live 連結
 
 - 搜尋/GA 兩支柱**重建為本站原生頁、讀平台端預產靜態 JSON**；真運算/ES 在叢集或離線批次，站上以**預產結果 + 截圖/GIF + MCP 實查**佐證，**每支柱可附一個「live demo」外連**。
