@@ -1,3 +1,7 @@
+> ⚠️ **已被取代（SUPERSEDED，2026-07-10）**：本 design 方向＝「忠實拆解 ptt-search 的單頁展示」。Fergus 2026-07-10 判「ptt-search 亮點不足」，方向翻案為**平台側自建進階中文檢索**（見 [`2026-07-10-search-pillar-brief-v2.md`](2026-07-10-search-pillar-brief-v2.md)＋其 design-v2）。本檔保留為歷史，不再據以實作。**可複用殘值**（v2 仍會沿用）：拓撲鐵律、fuse.js 站內離線示範作「最陽春對照層」、⌘K vs 搜尋支柱邊界、live-demo 誠實固定句式、Opus 把關揪出的 ptt-search admin 資安（§2 事實 15）。
+
+---
+
 # 搜尋支柱 design（`/search`：搜尋工程展示頁——ES/smartcn 架構敘事 + 真 Elasticsearch live-demo 外連 + 站內離線示範）
 
 > **上游**：[brief](2026-07-10-search-pillar-brief.md)（工作合約正本）＋ repo `CLAUDE.md`「Fable 5 design 精確度契約（8 條）」（自檢見 §12）＋ [統一作品集 crosscut design](2026-07-10-unified-portfolio-crosscut-design.md)（binding：§2.2/§2.3/§5/§7.2/§8.2/§10）＋ [Signal 設計系統 design](2026-07-10-frontend-design-system-design.md)（§4.3 取材點、§7 ⌘K palette、視覺地基）。

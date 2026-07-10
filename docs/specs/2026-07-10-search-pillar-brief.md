@@ -1,3 +1,7 @@
+> ⚠️ **已被取代（SUPERSEDED，2026-07-10）**：本 brief 與其 design（`2026-07-10-search-pillar-design.md`）方向＝「忠實拆解 ptt-search 的單頁展示」。Fergus 2026-07-10 判定「ptt-search 原本功能少、亮點不多」（ES bool query＋smartcn＋more_like_this＋search_logs 偏基礎），方向翻案為**平台側自建進階中文檢索**（hybrid BM25+vector RRF＋rerank＋檢索評測，複用 P2b/P6 向量基建）。**正本改看 [`2026-07-10-search-pillar-brief-v2.md`](2026-07-10-search-pillar-brief-v2.md)**。本檔保留為歷史，不再據以實作。
+
+---
+
 # 搜尋支柱 spec — brief（搜尋工程能力展示：ES 架構敘事 + 真 Elasticsearch live-demo + 站內離線示範）
 
 > **精確度契約**：依 repo `CLAUDE.md`「Fable 5 design 精確度契約（8 條）」交辦；design 逐條自檢。
