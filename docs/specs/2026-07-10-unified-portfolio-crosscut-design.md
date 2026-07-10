@@ -295,7 +295,7 @@ ga-insight graph（`graph.py:462-493`）：input guardrail（12 條 prompt-injec
 
 - **落點**：支柱首頁一張 `LiveDemoCard`（§5.3）＋ `/architecture` 整合模式卡內一行；**不放進 sidebar/topbar**（外連不是站內導航，混入 nav 會誤導拓撲認知）。
 - **誠實句式（固定，不得改寫弱化）**：「此連結開啟另一個獨立部署（{deployment}）；本站為純靜態展示，不依賴該服務。」外連一律 `target="_blank" rel="noopener noreferrer"`＋lucide `ExternalLink` icon＋顯示目標 hostname。
-- **v1 配置**：搜尋支柱 ✅（ptt-search 既有部署，URL plan 期實查回填 `pillars.ts`）；**問 AI 支柱 ✅ v1 就上**（Fergus 2026-07-10 定案；獨立 Cloud Run 端點跑 live LangGraph agent，per-day rate-limit follow-up，§6.4）；GA 支柱分析頁 ⏸（gated，GA 支柱 spec 評估是否需 live 運算外連，預設策展 JSON 足）；趨勢智能/平台架構 ✖（本體就是本站＋叢集，無外連對象）。
+- **v1 配置**：搜尋支柱 ✅（~~ptt-search 既有部署~~ **改判 2026-07-10：新建 Cloud Run `search-live`**——見 [搜尋支柱 design v2 §7](2026-07-10-search-pillar-design-v2.md)。搜尋支柱翻案為平台側自建進階中文檢索後，live-demo 目標從「外連 ptt-search 既有部署」改為「新建 search-live（Cloud Run＋Neon Postgres）跑平台同構 hybrid RRF SQL＋rerank」；ptt-search 部署保留不退役（§8.2）但 **v1 作品集不再外連它**，前身對照卡改純敘事＋截圖。此改判使 §8.2 待裁決 #4「ptt-search 部署 URL 存活」與 line 131 `pillars.ts` liveDemo 草樣一併被取代——URL 回填改指 search-live）；**問 AI 支柱 ✅ v1 就上**（Fergus 2026-07-10 定案；獨立 Cloud Run 端點跑 live LangGraph agent，per-day rate-limit follow-up，§6.4）；GA 支柱分析頁 ⏸（gated，GA 支柱 spec 評估是否需 live 運算外連，預設策展 JSON 足）；趨勢智能/平台架構 ✖（本體就是本站＋叢集，無外連對象）。
 
 ### 7.3 GA 支柱資料流骨架（合約邊界；細節 dataset/引擎 → GA 支柱 spec）
 
