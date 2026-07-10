@@ -42,13 +42,37 @@
 7. **硬約束貫徹**——一個工作一個工具、M4 原生算力界線、拓撲（平台不部署／前端 Vercel／匯出檔為合約）、secret 走 k8s Secret 不硬編碼、非互動不向使用者提問。
 8. **每步可測**——端到端驗收清單可實跑（有測試/smoke/DQ），不是敘述性「應該會動」。
 
-## 目前狀態（2026-07-09 更新——此段是本專案的活狀態正本，接手先讀這段）
+## 目前狀態（2026-07-10 更新——此段是本專案的活狀態正本，接手先讀這段 ＋ NORTH_STAR）
 
-📐 **規劃階段：P0–P5 六階段 design 全數完成、尚無實作碼**（`docs/plans/` 仍空、程式目錄仍只有 scaffold）。**下一動作＝接手 session 走 `superpowers:writing-plans`、從 P0 起逐份 design 寫 implementation plan**。
+📐 **全專案 spec-only：所有 design 已完成、`docs/plans/` 仍空、程式目錄仍只有 scaffold。下一動作＝接手 session 走 `superpowers:writing-plans`，從 P0 起逐份 design 寫 implementation plan。** 全部 design 皆已達「Fable 5 精確度契約 8 條」、可直接據以寫 plan；每份 design 尾段有 plan-前實查點清單（皆帶預設傾向）。
 
-🆕 **2026-07-09 擴充（規劃中，spec 未出）**：P0–P5 之外**新增 GA4 第二真來源 ＋ P6 推薦／P7 DMP／即時 Flink 三垂直**（正本論證＝NORTH_STAR「GA4 第二真來源 ＋ 三工具翻案」段）。核心動機：推薦需「真使用者×商品×互動」三角，YouTube/PTT 只有商品＋聚合、無真使用者 → 引入公開 `ga4_obfuscated_sample_ecommerce`（area02 真資料只當求職憑證、**不進本 repo**）。翻案三工具 ＋Redis／＋ClickHouse／＋Flink 各有獨特職務。**這幾份 design 尚未產出**——序：寫 Fable 5 brief（GA4 地基先 → P6/P7/即時後）→ 派 Fable 5 → 才寫 plan。**故「P0–P5 spec 收束」不代表全平台收束；P6/P7/即時是新開一輪 spec 產線。**
+### 已完成 design 全清單（依批次；檔在 `docs/specs/`）
 
-**六份 design 全數完成、且全達「Fable 5 design 精確度契約 8 條」（可據以寫 plan）**：
+**① 核心平台 P0–P5**（2026-07-08，6 份）——細節見本節末各階段條列。這是骨幹，P0 必先實作。
+
+**② 電商擴充 P6/P7**（2026-07-09，4 份 design ＋ 1 跨切）：`P6-ga4-ingestion-foundation`（引入公開 `ga4_obfuscated_sample_ecommerce` 為第二真來源，建 user×item×interaction 三角；area02 真資料只當求職憑證、**不進本 repo**）、`P6-recommendation`（召回 item2vec/pgvector→RRF→LightGBM LTR→KServe+Redis→LangGraph 生成推薦理由→A/B）、`P6-realtime-features`（Flink 有狀態事件時間即時特徵）、`P7-dmp`（RFM/行為標籤/ClickHouse 事件 OLAP/圈選 DSL）；跨切 `ga4-extension-crosscut`。三工具翻案（＋Redis/＋ClickHouse/＋Flink）論證正本在 NORTH_STAR「GA4 第二真來源 ＋ 三工具翻案」段。
+
+**③ 統一資料作品集四支柱**（2026-07-10）：`unified-portfolio-crosscut`（主契約：前端升為一站四支柱主題切換，取代 ga-insight、納入 ptt-search）、`frontend-design-system`（Signal 設計系統，Tailwind v4 `@theme`＋shadcn，pillar-agnostic 地基）、`ga-pillar`（GA 分析支柱，銷售漏斗為核心、比 ga-insight 更完整）、`search-pillar-v2`（平台側自建進階中文檢索 hybrid BM25+向量 RRF+cross-encoder rerank；**v1 已 SUPERSEDED**）、`ask-ai`（問 AI agentic 分析問答，複用 P2b LangGraph 擴 Send fan-out＋雙 guardrail＋reflection）。論證正本在 NORTH_STAR「統一資料作品集重定位」段。
+
+**④ 進階增補**（2026-07-10）：`p6-advanced-recall`（序列 SASRec baseline＋P5/T5 生成式主秀，反幻覺三層＋一 item 一 special token，additive 接進現有 RRF+LTR）、`p7-model-based-tags`（K-Means 消費分群 additive 疊加、不取代規則式 value_tier，DB 表登錄不掛 MLflow）、`observability-hardening`（三柱補齊 OTel+Tempo／Loki+Alloy／手寫 burn-rate SLO×4 ＋ P1 留言管線自癒；論證正本在 NORTH_STAR「觀測性三柱翻案」段）、`ai-ops-incident-narrator`（Alertmanager 告警觸發 AI SRE，反幻覺為主體、數字/時間戳程式取自 PromQL/Loki，棄 Dify/DeepSeek 走 LangGraph+P2b LLMClient）。
+
+### 寫 plan 的硬序（接手 session 照此序寫 implementation plan）
+
+1. **P0 平台底座必先**（k8s+ArgoCD+CI+監控，其他全跑在它上面）。
+2. **P1**（＋留言 ingest 增補）→ **P2/P3** 吃 P1 產物（Gold 5 表 ＋ `silver_youtube_comments` 合約）。
+3. **P2b（RAG/LLMOps 基建）→ 問 AI 支柱 → AI 維運敘事者**：後兩者都複用 P2b LangGraph 基建；aiops plan 另需**觀測性強化 plan 先行**。
+4. **P4 呈現層**吃 P1+P2+P3 匯出合約；**四支柱前端**（`frontend-design-system` Signal 為地基先行 → GA/搜尋/問 AI 三支柱）疊在 P4 之上。
+5. **P5 收尾**（安全掃描/架構圖/JD 敘事）在 P0–P4 實作後。
+6. **P6 推薦 → P6 進階召回**；**P7 DMP → P7 模型化標籤**（進階兩者互不依賴、可平行）。
+7. **觀測性強化 plan 先於 aiops plan**。
+
+### 跨 plan 協調點（別讓兩 plan 各解一次）
+
+- **`alertmanagerConfigMatcherStrategy: {type: None}`**：觀測性強化的 Discord AlertmanagerConfig CRD 與 aiops 的 webhook CRD **共用同一縫**（operator 預設 `OnNamespace` 會讓第二個 receiver 收不到告警）→ 兩 plan 必須收斂為同一解。
+- **P6 進階召回**擴 `ml.reco_candidates` 的 `source` CHECK 列舉 ＋ RECO_FEATURE_SCHEMA v1→v2（尾端加 3 欄、皆 additive）→ 與 P6 推薦 plan 的 schema 版本要對齊。
+- **P7 模型化標籤**用投影法（`ALTER`+`UPDATE` `gold.dmp_user_profiles`，規則層 dbt 檔零編輯）→ 不與 P7 DMP plan 的 dbt 模型衝突。
+
+**六份核心 P0–P5 design 細節**（沿用前記錄、內容未變，供接手直接照抄驗收）：
 - **P0 平台底座**（`...-P0-platform-foundation-design.md`）：kind + ArgoCD app-of-apps + GitHub Actions/GHCR + kube-prometheus-stack。**收緊 pass `7999f0d`**（修 Grafana 隨機密碼行為、CI actions 版本、Dockerfile/驗收補到可照抄；錨點與 sync-wave 0/1/2 零變動）。
 - **P1 資料管線**（`...-P1-data-pipeline-design.md`）：Airflow KubernetesExecutor + spark-operator + MinIO/Iceberg JDBC catalog；**§6a Gold marts 5 表合約**（`gold_trending_daily`/`gold_channel_performance`/`gold_category_daily`/`gold_video_velocity_hourly`/`gold_video_lifecycle`，additive-only，是 P2 介面）。**收緊 pass `432fb6a`**（修 §6 freshness `loaded_at_field` 對不存在欄的矛盾、補 k8s DNS/env 注入/角色 GRANT+`ALTER DEFAULT PRIVILEGES` 合約；§6a/§3/§5/§8 錨點一字未動）。
 - **P1 留言 ingest 增補**（`...-P1-comments-ingest-design.md`，`17da698`）：additive 加抓 YouTube 留言（決策 B）；quota 4000u 累積型（8–14 天湊百萬列）、Bronze 邊界遮蔽去識別、Silver `silver_youtube_comments`（13 欄，MERGE by comment_id）是 P2b/P2c 上游合約。不動既有 5 表。
@@ -57,7 +81,7 @@
 - **P4 呈現層**（`...-P4-presentation-layer-design.md`，`934cf54`）：匯出 DAG `export_frontend_data`→MinIO→host `make export-sync`→人審 commit 進 `frontend/public/data/`（**committed 靜態 minified JSON**，否決 Neon/物件儲存，k8s 不持 GitHub 權杖）；前端 **Next.js 16.2 App Router `output:'export'` 純靜態**（拓撲鐵律編譯期強制）+ Recharts，8 頁；MCP = **FastMCP 3.2 部署 Prefect Horizon（上雲，可被遠端 Claude 查）**，10 工具讀公開 `/data/*.json`，不可用則降級本地 demo 零改碼；Vercel root dir=`frontend/` 零 env。ML 表缺席 `status:"absent"` 容忍（P1 完成即可先上線）。
 - **P5 收尾**（`...-P5-polish-hardening-design.md`，`04b5874`）：CI 安全掃描 **Trivy+gitleaks+CodeQL**（**image gate 卡 GitOps 交棒點**=CRITICAL-with-fix 沒清就不 bump manifest）；架構圖 **Mermaid 4 張**；面試敘事 **三份 JD one-pager + `DECISIONS.md`（ADR-lite 16 條）**。§1 專表畫清「現可定 vs 執行期對真 artifact 做（掃真 image/截 8 圖+1 GIF）」界線，初版禁量化成果。
 
-**下一步**：接手 session 走 `superpowers:writing-plans` 逐份寫 implementation plan（spec 已完備）→ 同一或另一 session 執行。**P0 必先實作**（其他跑在它上面）；P1 留言/P2/P3 吃 P1 產物；P4 吃 P1+P2+P3 匯出合約；P5 收尾在 P0–P4 實作後執行（但 spec 已定）。各 design 尾段有 plan-前實查點清單（皆帶預設傾向）。
+**下一步**：見上方「寫 plan 的硬序」——接手 session 走 `superpowers:writing-plans`，從 P0 起逐份寫 implementation plan（spec 已完備）→ 同一或另一 session 執行。各 design 尾段有 plan-前實查點清單（皆帶預設傾向）。
 
 **關鍵鎖定決策**（正本在 NORTH_STAR「已鎖定決策清單」+「LLM／微調層與留言語料」+「GA4 第二真來源 ＋ 三工具翻案」+ M4 原生算力原則）：Kafka（P3 佇列）· **＋Redis/ClickHouse/Flink（2026-07-09 翻案，各有獨特職務，見上）** · agent 框架 LangGraph（砍 CrewAI）· 向量庫 pgvector · embedding 本地 · 生成 Ollama/Gemini 可切 · 微調 HuggingFace（砍 MLX）· **重算力原生跑 M4 host**（kind 摸不到 Apple GPU）產出可攜雲端 · 呈現層 Next.js/Vercel（平台不部署，匯出 JSON 為合約，前端打不到本地 k8s）· MCP server 為 P4/P5 加分 · **前端說明式 UI**（仿 ga-insight 三層：InfoTooltip/ChartCaption/Explainer，跨 P4/P6/P7 硬性）。
 

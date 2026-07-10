@@ -4,7 +4,7 @@
 
 以 YouTube 熱門趨勢為主幹（PTT 論壇為第二來源），把原始資料從 **ingest → Lakehouse → 建模 → 上線監控**打通一條龍，全程跑在 **Kubernetes**、以 **GitOps** 部署、具備完整可觀測性。一個平台同時展示資料工程、模型維運、平台工程三種能力。
 
-> 狀態：📐 **規劃中、實作待啟動**。P0–P5 六份設計 spec 全數完成（皆通過內建的「精確度契約 8 條」）、尚無實作碼；**2026-07-09 起新增一輪擴充**——GA4 第二真來源 ＋ **P6 推薦／P7 DMP／即時 Flink 三垂直**（spec 待產）。架構正本見 [`docs/architecture/NORTH_STAR.md`](docs/architecture/NORTH_STAR.md)；接手指南與最新進度見 [`CLAUDE.md`](CLAUDE.md)。
+> 狀態：📐 **全專案 spec-only、實作待啟動**（`docs/plans/` 仍空、程式目錄僅 scaffold）。截至 **2026-07-10**，所有設計 spec 皆已完成並通過內建「精確度契約 8 條」：核心平台 **P0–P5**、電商擴充 **P6 推薦／P7 DMP／即時 Flink**（＋GA4 第二真來源）、**統一資料作品集四支柱**（Signal 設計系統／GA／搜尋／問 AI）、以及**進階增補**（P6 進階召回、P7 模型化標籤、觀測性強化、AI 維運事件敘事者）。**下一動作＝接手 session 走 `superpowers:writing-plans`，從 P0 起逐份寫 implementation plan**。架構正本見 [`docs/architecture/NORTH_STAR.md`](docs/architecture/NORTH_STAR.md)；接手指南、完整 design 清單與寫 plan 硬序見 [`CLAUDE.md`](CLAUDE.md)。
 
 ---
 
@@ -71,11 +71,21 @@
 | **P3** 進階 ingest | PTT 分散式容錯爬蟲第二來源，Kafka 佇列範式（跟 P1 批次刻意不同） | 爬蟲 / 串流硬實力 | ✅ design |
 | **P4** 呈現層 | Next.js 儀表板讀匯出資料 → 部署 Vercel；平台端匯出 DAG；＋ MCP server | 前端/全端 + 整體展示 | ✅ design |
 | **P5** 收尾 | 安全掃描（Trivy+gitleaks+CodeQL）、架構圖（Mermaid）、三 JD 面試敘事 | 整體打磨 | ✅ design |
-| **P6** 推薦系統 🆕 | GA4 全漏斗 → 召回(CF/語意) → LTR 排序 → Redis 快取 + KServe 線上服務 → LangGraph 推薦理由 → A/B + 離線評估 | MLOps / 推薦系統 | 🗒️ 待 spec |
-| **P7** 使用者畫像/DMP 🆕 | 真使用者 RFM/LTV/行為標籤 → ClickHouse 事件 OLAP → 人群圈選 DSL → admin | DE / 資料分析 | 🗒️ 待 spec |
-| **即時特徵層** 🆕 | GA4 `events_intraday` → Flink 有狀態事件時間特徵 → 餵 P6 線上服務 | DE / 串流 | 🗒️ 待 spec |
+| **P6** 推薦系統 | GA4 全漏斗 → 召回(CF/語意) → LTR 排序 → Redis 快取 + KServe 線上服務 → LangGraph 推薦理由 → A/B + 離線評估 | MLOps / 推薦系統 | ✅ design |
+| **P7** 使用者畫像/DMP | 真使用者 RFM/LTV/行為標籤 → ClickHouse 事件 OLAP → 人群圈選 DSL → admin | DE / 資料分析 | ✅ design |
+| **即時特徵層** | GA4 `events_intraday` → Flink 有狀態事件時間特徵 → 餵 P6 線上服務 | DE / 串流 | ✅ design |
 
-> 🆕 = **2026-07-09 擴充（規劃中）**：由「推薦需真使用者×商品×互動三角，YouTube/PTT 無真使用者」推動，引入公開 GA4 sample 為第二真來源（area02 真資料只當求職憑證、不進本 repo），並翻案加入 Redis/ClickHouse/Flink 三工具（各有獨特職務）。論證正本見 [`NORTH_STAR.md`](docs/architecture/NORTH_STAR.md) 對應段。
+> 上列 P6/P7/即時（2026-07-09 擴充）由「推薦需真使用者×商品×互動三角，YouTube/PTT 無真使用者」推動，引入公開 GA4 sample 為第二真來源（area02 真資料只當求職憑證、不進本 repo），並翻案加入 Redis/ClickHouse/Flink 三工具（各有獨特職務）。論證正本見 [`NORTH_STAR.md`](docs/architecture/NORTH_STAR.md) 對應段。
+
+### 2026-07-10 擴充 spec（皆 ✅ design）
+
+| 群組 | 內容 | Spec |
+|---|---|---|
+| **統一資料作品集四支柱** | 前端升為一站四支柱主題切換（趨勢/GA/搜尋/平台），取代 ga-insight、納入 ptt-search：`unified-portfolio-crosscut`（主契約）＋`frontend-design-system`（Signal 設計系統，pillar-agnostic 地基）＋`ga-pillar`（漏斗為核心）＋`search-pillar-v2`（自建 hybrid 中文檢索；v1 SUPERSEDED）＋`ask-ai`（agentic 問答，複用 P2b LangGraph） | ✅ design |
+| **進階推薦/畫像增補** | `p6-advanced-recall`（序列 SASRec＋P5/T5 生成式，反幻覺三層，additive 接 RRF+LTR）＋`p7-model-based-tags`（K-Means 消費分群 additive 疊加規則式 value_tier，DB 表登錄不掛 MLflow） | ✅ design |
+| **平台硬化** | `observability-hardening`（三柱補齊 OTel+Tempo/Loki+Alloy/手寫 burn-rate SLO×4＋P1 自癒）＋`ai-ops-incident-narrator`（告警觸發 AI SRE，反幻覺為主體，LangGraph+P2b LLMClient，棄 Dify/DeepSeek） | ✅ design |
+
+> 論證正本見 [`NORTH_STAR.md`](docs/architecture/NORTH_STAR.md)「統一資料作品集重定位」與「觀測性三柱翻案」兩段。
 
 ## 目錄結構
 
