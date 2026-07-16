@@ -1,0 +1,37 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-prometheus-stack
+    targetRevision: 87.10.1
+    helm:
+      valuesObject:
+        prometheus:
+          prometheusSpec:
+            serviceMonitorSelectorNilUsesHelmValues: false
+            podMonitorSelectorNilUsesHelmValues: false
+            serviceMonitorNamespaceSelector: {}
+            retention: 24h
+            # storageSpec 刻意不設 → emptyDir（可攜鐵律；EKS 版見 README）
+        grafana:
+          ingress:
+            enabled: true
+            ingressClassName: nginx
+            hosts: [grafana.localtest.me]
+          sidecar:
+            dashboards: {enabled: true, label: grafana_dashboard}
+        alertmanager: {enabled: true}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated: {prune: true, selfHeal: true}
+    syncOptions: [CreateNamespace=true, ServerSideApply=true]
+    retry: {limit: 10, backoff: {duration: 15s, factor: 2, maxDuration: 3m}}
