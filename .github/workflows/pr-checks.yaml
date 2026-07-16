@@ -1,0 +1,29 @@
+name: pr-checks
+on:
+  pull_request:
+    paths:
+      - "platform/hello/**"        # 含 k8s/**：manifest 改動也要過閘
+      - "platform/argocd/**"
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v8
+        with: {python-version: "3.12"}
+      - run: uv sync
+        working-directory: platform/hello
+      - run: uv run ruff check .
+        working-directory: platform/hello
+      - run: uv run pytest tests/ -v
+        working-directory: platform/hello
+  portability-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: no controller-specific annotation / storageClassName
+        run: |
+          if grep -rn "alb.ingress\|storageClassName" platform/; then
+            echo "可攜鐵律違反：發現專屬 annotation 或 storageClassName"; exit 1
+          fi
+          echo "portability OK"
