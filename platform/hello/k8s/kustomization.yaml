@@ -8,4 +8,4 @@ resources:
   - ingress.yaml
 images:
   - name: ghcr.io/ferguske/trend-intelligence-platform/hello
-    newTag: sha-80ab654
+    newTag: sha-c8f7bbc
