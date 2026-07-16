@@ -5,7 +5,7 @@ cluster-up:            ## 一鍵：叢集 → ArgoCD → root app（之後全靠
 	kind get clusters | grep -q '^trend-platform$$' || \
 	  kind create cluster --config platform/bootstrap/kind-cluster.yaml
 	kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
-	kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/$(ARGOCD_VERSION)/manifests/install.yaml
+	kubectl apply --server-side --force-conflicts -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/$(ARGOCD_VERSION)/manifests/install.yaml  # SSA：applicationsets CRD 超過 client-side 256KB annotation 上限
 	kubectl -n argocd rollout status deploy/argocd-server --timeout=180s
 	kubectl apply -f platform/bootstrap/root-app.yaml
 	@echo "Bootstrap 完成。之後由 ArgoCD 收斂（~3-5 分鐘），跑 make verify 驗收。"
