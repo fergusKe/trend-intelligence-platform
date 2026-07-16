@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hello-service-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  hello-service-dashboard.json: |
+    {
+      "uid": "hello-service",
+      "title": "Hello Service",
+      "schemaVersion": 39,
+      "editable": true,
+      "time": {"from": "now-1h", "to": "now"},
+      "refresh": "10s",
+      "panels": [
+        {
+          "id": 1,
+          "title": "RPS",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [
+            {"refId": "A", "expr": "sum(rate(http_requests_total{handler!~\"/metrics|/healthz\"}[5m]))"}
+          ]
+        },
+        {
+          "id": 2,
+          "title": "p95 latency",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [
+            {"refId": "A", "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))"}
+          ]
+        },
+        {
+          "id": 3,
+          "title": "4xx/5xx rate",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [
+            {"refId": "A", "expr": "sum(rate(http_requests_total{status=~\"4..|5..\"}[5m])) / sum(rate(http_requests_total[5m]))"}
+          ]
+        },
+        {
+          "id": 4,
+          "title": "Pod restarts (apps)",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [
+            {"refId": "A", "expr": "kube_pod_container_status_restarts_total{namespace=\"apps\"}"}
+          ]
+        }
+      ]
+    }
