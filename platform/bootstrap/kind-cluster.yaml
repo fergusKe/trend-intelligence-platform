@@ -12,7 +12,7 @@ nodes:
         listenAddress: "127.0.0.1"
         protocol: TCP
       - containerPort: 443
-        hostPort: 443
+        hostPort: 8443                # M4 host 的 443 被 Tailscale 佔用，避開；P0 驗收全走 HTTP 不受影響
         listenAddress: "127.0.0.1"
         protocol: TCP
   - role: worker
