@@ -25,7 +25,7 @@
 | postgres_exporter | **v0.20.1**（`quay.io/prometheuscommunity/postgres-exporter`） | GitHub releases |
 | hadoop-aws / aws-java-sdk-bundle jars | 對齊 spark:4.0.2 內建 Hadoop（範本用 3.4.1 / 1.12.780；見 §12 實查 5） | 範本 + 待落地校準 |
 
-CI actions 沿用 P0 pin（checkout@v5 / setup-uv@v4 / buildx@v3 / login@v3 / build-push@v6，runner 內建 `yq`）。
+CI actions 沿用 P0 pin（以 P0 design §0 實際值為準，不在此重列版號——2026-07-17 勘誤：本行原列 checkout@v5 等舊版號，係寫於 P0 收緊 pass 之前，已與 P0 §0 對不上；runner 內建 `yq`）。
 
 ---
 

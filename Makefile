@@ -1,4 +1,4 @@
-.PHONY: cluster-up cluster-down verify argocd-ui
+.PHONY: cluster-up cluster-down cluster-stop cluster-start verify argocd-ui
 ARGOCD_VERSION := v3.4.4
 
 cluster-up:            ## 一鍵：叢集 → ArgoCD → root app（之後全靠 GitOps 收斂）
@@ -13,6 +13,12 @@ cluster-up:            ## 一鍵：叢集 → ArgoCD → root app（之後全靠
 
 cluster-down:
 	kind delete cluster --name trend-platform
+
+cluster-stop:          ## 暫停整座叢集（狀態保留）——跑 Ollama/微調等 host 重活前先執行，釋放 VM 記憶體
+	docker ps --filter "name=trend-platform" -q | xargs docker stop
+
+cluster-start:         ## 恢復叢集（pod 重新收斂約 1-3 分鐘，可用 make verify 複驗）
+	docker ps -a --filter "name=trend-platform" -q | xargs docker start
 
 verify:
 	./scripts/verify.sh

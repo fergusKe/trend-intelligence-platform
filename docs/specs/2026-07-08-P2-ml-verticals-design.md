@@ -170,7 +170,7 @@ scripts/verify-ml.sh
 | wave | Application | namespace | 內容 |
 |---|---|---|---|
 | 7 | cert-manager | `cert-manager` | Helm chart v1.20.3（KServe webhook 前置；`installCRDs: true`） |
-| 8 | kserve-crd | `kserve` | KServe CRDs chart v0.19.0 |
+| 8 | kserve-crd | `kserve` | KServe CRDs chart v0.19.0（**`syncOptions: [ServerSideApply=true]`**——InferenceService CRD 巨大，client-side apply 會撞 256KB annotation 上限，同 P0 kube-prometheus-stack / P3 strimzi 慣例；2026-07-17 勘誤補上） |
 | 8 | ml-db-init | `data` | PostSync hook Job（冪等 SQL，§3.4）——**必須先於 mlflow**（它建 `mlflow` db） |
 | 9 | kserve | `kserve` | controller chart v0.19.0：`deploymentMode: RawDeployment`、inferenceservice-config `ingress: {ingressClassName: nginx, ingressDomain: localtest.me, enableGatewayApi: false}`（確切 values 路徑 §15 實查 1） |
 | 9 | mlflow | `ml` | plain kustomize（§1②） |
