@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@v7
       - name: no controller-specific annotation / storageClassName
         run: |
-          if grep -rn "alb.ingress\|storageClassName" platform/; then
+          if grep -rn "alb.ingress\|nginx\.ingress\|storageClassName" platform/; then
             echo "可攜鐵律違反：發現專屬 annotation 或 storageClassName"; exit 1
           fi
           echo "portability OK"

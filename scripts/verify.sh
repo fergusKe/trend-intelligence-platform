@@ -29,20 +29,30 @@ echo "[4/7] hello 指標"
 curl -fsS http://hello.localtest.me/metrics | grep -q http_requests_total || fail "hello /metrics 無 http_requests_total"
 ok "hello /metrics 含 http_requests_total"
 
-echo "[5/7] Prometheus 已 scrape apps"
+echo "[5/7] Prometheus 已 scrape apps（首次 scrape 最多等 180s）"
 kubectl -n monitoring port-forward svc/monitoring-kube-prometheus-prometheus 9090:9090 >/dev/null 2>&1 &
 pf_pid=$!; trap 'kill "$pf_pid" 2>/dev/null || true' EXIT
 sleep 4
-val=$(curl -fsS 'http://localhost:9090/api/v1/query?query=up%7Bnamespace%3D%22apps%22%7D' | jq -r '.data.result | length') || val=0
+deadline=$(( $(date +%s) + 180 ))
+while :; do
+  val=$(curl -fsS 'http://localhost:9090/api/v1/query?query=up%7Bnamespace%3D%22apps%22%7D' | jq -r '.data.result | length') || val=0
+  [ "$val" -ge 1 ] && break
+  [ "$(date +%s)" -gt "$deadline" ] && { trap - EXIT; kill "$pf_pid" 2>/dev/null || true; fail "Prometheus 未 scrape apps namespace（up 結果空，等了 180s）"; }
+  sleep 10
+done
 trap - EXIT
 kill "$pf_pid" 2>/dev/null || true
-[ "$val" -ge 1 ] || fail "Prometheus 未 scrape apps namespace（up 結果空）"
 ok "Prometheus 已 scrape apps（up=1）"
 
-echo "[6/7] Grafana + dashboard 已載"
+echo "[6/7] Grafana + dashboard 已載（sidecar 匯入最多等 180s）"
 curl -fsS http://grafana.localtest.me/api/health | grep -q '"database": *"ok"' || fail "Grafana health 非 ok"
 GRAFANA_PW=$(kubectl -n monitoring get secret monitoring-grafana -o jsonpath='{.data.admin-password}' | base64 -d)
-curl -fsS -u "admin:$GRAFANA_PW" "http://grafana.localtest.me/api/search?query=Hello" | grep -q '"title": *"Hello Service"' || fail "Grafana 找不到 dashboard 'Hello Service'"
+deadline=$(( $(date +%s) + 180 ))
+while :; do
+  curl -fsS -u "admin:$GRAFANA_PW" "http://grafana.localtest.me/api/search?query=Hello" | grep -q '"title": *"Hello Service"' && break
+  [ "$(date +%s)" -gt "$deadline" ] && fail "Grafana 找不到 dashboard 'Hello Service'（等了 180s）"
+  sleep 10
+done
 ok "Grafana health ok + dashboard 'Hello Service' 已載"
 
 echo "[7/7] 部署 image 可回溯"
