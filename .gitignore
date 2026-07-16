@@ -47,3 +47,6 @@ kubeconfig*
 .idea/
 .vscode/
 *.log
+
+# superpowers SDD scratch
+.superpowers/
