@@ -9,6 +9,7 @@ on:
       - "platform/hello/pyproject.toml"
       - "platform/hello/uv.lock"
       # 刻意不含 platform/hello/k8s/ → bump commit 不會再觸發
+  workflow_dispatch: {}          # 手動重建 image（例：workflow 檔自身修正後補跑）
 concurrency:
   group: hello-ci
   cancel-in-progress: false
