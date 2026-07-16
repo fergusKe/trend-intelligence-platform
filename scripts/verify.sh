@@ -12,7 +12,7 @@ ok "3 節點 Ready"
 echo "[2/7] ArgoCD apps 收斂（timeout 600s）"
 deadline=$(( $(date +%s) + 600 ))
 while :; do
-  json=$(kubectl -n argocd get applications -o json)
+  json=$(kubectl -n argocd get applications -o json 2>/dev/null) || { [ "$(date +%s)" -gt "$deadline" ] && fail "ArgoCD 未收斂：kubectl 查詢持續失敗（timeout）"; sleep 10; continue; }
   total=$(echo "$json" | jq '.items | length')
   good=$(echo "$json" | jq '[.items[] | select(.status.sync.status=="Synced" and .status.health.status=="Healthy")] | length')
   [ "$total" = "5" ] && [ "$good" = "5" ] && break
@@ -31,8 +31,10 @@ ok "hello /metrics 含 http_requests_total"
 
 echo "[5/7] Prometheus 已 scrape apps"
 kubectl -n monitoring port-forward svc/monitoring-kube-prometheus-prometheus 9090:9090 >/dev/null 2>&1 &
-pf_pid=$!; sleep 4
-val=$(curl -fsS 'http://localhost:9090/api/v1/query?query=up%7Bnamespace%3D%22apps%22%7D' | jq -r '.data.result | length')
+pf_pid=$!; trap 'kill "$pf_pid" 2>/dev/null || true' EXIT
+sleep 4
+val=$(curl -fsS 'http://localhost:9090/api/v1/query?query=up%7Bnamespace%3D%22apps%22%7D' | jq -r '.data.result | length') || val=0
+trap - EXIT
 kill "$pf_pid" 2>/dev/null || true
 [ "$val" -ge 1 ] || fail "Prometheus 未 scrape apps namespace（up 結果空）"
 ok "Prometheus 已 scrape apps（up=1）"
@@ -40,7 +42,7 @@ ok "Prometheus 已 scrape apps（up=1）"
 echo "[6/7] Grafana + dashboard 已載"
 curl -fsS http://grafana.localtest.me/api/health | grep -q '"database": *"ok"' || fail "Grafana health 非 ok"
 GRAFANA_PW=$(kubectl -n monitoring get secret monitoring-grafana -o jsonpath='{.data.admin-password}' | base64 -d)
-curl -fsS -u "admin:$GRAFANA_PW" "http://grafana.localtest.me/api/search?query=Hello" | grep -q '"title":"Hello Service"' || fail "Grafana 找不到 dashboard 'Hello Service'"
+curl -fsS -u "admin:$GRAFANA_PW" "http://grafana.localtest.me/api/search?query=Hello" | grep -q '"title": *"Hello Service"' || fail "Grafana 找不到 dashboard 'Hello Service'"
 ok "Grafana health ok + dashboard 'Hello Service' 已載"
 
 echo "[7/7] 部署 image 可回溯"
