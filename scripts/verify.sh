@@ -6,7 +6,7 @@ ok()   { echo "✅ $1"; }
 
 echo "[1/7] 節點就緒"
 ready=$(kubectl get nodes --no-headers | awk '$2=="Ready"' | wc -l | tr -d ' ')
-[ "$ready" = "3" ] || fail "節點 Ready 數 = $ready（預期 3）"
+[ "$ready" = "3" ] || fail "節點 Ready 數 = ${ready}（預期 3）"
 ok "3 節點 Ready"
 
 echo "[2/7] ArgoCD apps 收斂（timeout 600s）"
@@ -16,7 +16,7 @@ while :; do
   total=$(echo "$json" | jq '.items | length')
   good=$(echo "$json" | jq '[.items[] | select(.status.sync.status=="Synced" and .status.health.status=="Healthy")] | length')
   [ "$total" = "5" ] && [ "$good" = "5" ] && break
-  [ "$(date +%s)" -gt "$deadline" ] && fail "ArgoCD 未收斂：total=$total synced+healthy=$good（預期 5/5）"
+  [ "$(date +%s)" -gt "$deadline" ] && fail "ArgoCD 未收斂：total=$total synced+healthy=${good}（預期 5/5）"
   sleep 10
 done
 ok "5 個 app 全 Synced + Healthy"
@@ -58,8 +58,8 @@ ok "Grafana health ok + dashboard 'Hello Service' 已載"
 echo "[7/7] 部署 image 可回溯"
 img=$(kubectl -n apps get deploy hello -o jsonpath='{.spec.template.spec.containers[0].image}')
 newtag=$(yq '.images[0].newTag' platform/hello/k8s/kustomization.yaml)
-echo "$img" | grep -q "sha-" || fail "deploy image tag 非 sha-*（$img）"
-echo "$img" | grep -q "$newtag" || fail "deploy image tag 與 kustomization newTag 不一致（$img vs $newtag）"
-ok "image 可回溯（$img）"
+echo "$img" | grep -q "sha-" || fail "deploy image tag 非 sha-*（${img}）"
+echo "$img" | grep -q "$newtag" || fail "deploy image tag 與 kustomization newTag 不一致（${img} vs ${newtag}）"
+ok "image 可回溯（${img}）"
 
 echo "🎉 全部 7 項驗收通過"

@@ -6,6 +6,7 @@ cluster-up:            ## 一鍵：叢集 → ArgoCD → root app（之後全靠
 	  kind create cluster --config platform/bootstrap/kind-cluster.yaml
 	kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
 	kubectl apply --server-side --force-conflicts -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/$(ARGOCD_VERSION)/manifests/install.yaml  # SSA：applicationsets CRD 超過 client-side 256KB annotation 上限
+	kubectl -n argocd delete netpol --all --ignore-not-found  # kind 內建 netpol 執法器會丟棄 ArgoCD ingress-only netpol 的 DNS/UDP 回包→controller 全癱；kind 單機叢集刪之無安全損失
 	kubectl -n argocd rollout status deploy/argocd-server --timeout=180s
 	kubectl apply -f platform/bootstrap/root-app.yaml
 	@echo "Bootstrap 完成。之後由 ArgoCD 收斂（~3-5 分鐘），跑 make verify 驗收。"
