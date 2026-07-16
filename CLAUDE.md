@@ -42,9 +42,13 @@
 7. **硬約束貫徹**——一個工作一個工具、M4 原生算力界線、拓撲（平台不部署／前端 Vercel／匯出檔為合約）、secret 走 k8s Secret 不硬編碼、非互動不向使用者提問。
 8. **每步可測**——端到端驗收清單可實跑（有測試/smoke/DQ），不是敘述性「應該會動」。
 
-## 目前狀態（2026-07-10 更新——此段是本專案的活狀態正本，接手先讀這段 ＋ NORTH_STAR）
+## 目前狀態（2026-07-17 更新——此段是本專案的活狀態正本，接手先讀這段 ＋ NORTH_STAR）
 
-📐 **全專案 spec-only：所有 design 已完成、`docs/plans/` 仍空、程式目錄仍只有 scaffold。下一動作＝接手 session 走 `superpowers:writing-plans`，從 P0 起逐份 design 寫 implementation plan。** 全部 design 皆已達「Fable 5 精確度契約 8 條」、可直接據以寫 plan；每份 design 尾段有 plan-前實查點清單（皆帶預設傾向）。
+🚀 **P0 已實作完成並部署**：plan `docs/plans/2026-07-16-P0-platform-foundation-implementation.md` 全 13 task 執行完、最終全分支 review READY、已合回 main；kind 叢集跑在 **M4 runtime**（開發在 M1、SSH 過去，見 errata §F）；hello-ci 全迴路通（GHCR image + bump commit）。下一動作＝寫 P1 plan。
+
+⚠️ **寫任何 plan 前必讀 [`docs/specs/2026-07-17-design-errata.md`](docs/specs/2026-07-17-design-errata.md)**——design 三路審查的勘誤補丁層（Fergus 拍板取捨、資源治理契約、pin 再驗證前置 task、P0 實跑教訓/M4 環境事實）；與 design 本文衝突時以 errata 為準。
+
+📐 其餘階段仍 spec-only。全部 design 皆已達「Fable 5 精確度契約 8 條」；每份 design 尾段有 plan-前實查點清單（皆帶預設傾向）。
 
 ### 已完成 design 全清單（依批次；檔在 `docs/specs/`）
 

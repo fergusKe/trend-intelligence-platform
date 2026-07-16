@@ -39,6 +39,7 @@ jobs:
         run: |
           echo "TAG=sha-$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
           echo "IMAGE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')/hello" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-qemu-action@v4   # arm64 交叉編譯（runtime 是 Apple Silicon kind 節點）
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
         with:
@@ -48,6 +49,7 @@ jobs:
       - uses: docker/build-push-action@v7
         with:
           context: platform/hello
+          platforms: linux/amd64,linux/arm64   # 缺 arm64 會在 M4 kind 上 ImagePullBackOff（no match for platform）
           push: true
           tags: |
             ${{ steps.vars.outputs.IMAGE }}:${{ steps.vars.outputs.TAG }}
