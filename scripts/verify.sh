@@ -42,6 +42,7 @@ while :; do
 done
 trap - EXIT
 kill "$pf_pid" 2>/dev/null || true
+wait "$pf_pid" 2>/dev/null || true   # 靜默收屍，避免 bash 印 Terminated 噪音
 ok "Prometheus 已 scrape apps（up=1）"
 
 echo "[6/7] Grafana + dashboard 已載（sidecar 匯入最多等 180s）"
