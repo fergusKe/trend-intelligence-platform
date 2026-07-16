@@ -11,7 +11,8 @@ spec:
     repoURL: https://github.com/fergusKe/trend-intelligence-platform
     targetRevision: main
     path: platform/monitoring/dashboards
-    directory: {recurse: false}
+    # 不寫 directory.recurse——false 是預設值，ArgoCD 會把預設值欄位正規化剝掉，
+    # 寫了反而讓 root app 永久 OutOfSync（selfHeal 無限打架，generation 暴增）
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
