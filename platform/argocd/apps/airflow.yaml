@@ -16,7 +16,8 @@ spec:
         executor: KubernetesExecutor
         postgresql:
           enabled: false # metadata 走共用 Postgres 的 airflow db（一套 Postgres 紀律）
-        metadataSecretName: lakehouse-postgres # chart 約定 key 名 connection（§8）
+        data:
+          metadataSecretName: lakehouse-postgres # chart 約定 key 名 connection（§8）。必須在 data: 下——top-level metadataSecretName 會被 chart 靜默忽略而 fallback 內建 postgresql（airflow-postgresql.airflow，本專案未部署→DNS 解不出→migrate/init 全炸）
         webserverSecretKeySecretName: airflow-webserver-secret
         images:
           airflow:
