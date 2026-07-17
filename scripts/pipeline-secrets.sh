@@ -11,7 +11,7 @@ get_or_gen() {  # $1=ns $2=secret $3=key
   printf '%s' "${v}"
 }
 
-for ns in data airflow; do
+for ns in data airflow monitoring; do
   kubectl create namespace "${ns}" --dry-run=client -o yaml | kubectl apply -f -
 done
 

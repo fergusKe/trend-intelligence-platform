@@ -26,8 +26,24 @@ echo "${buckets}" | grep -q bronze || fail "bronze bucket 不存在"
 echo "${buckets}" | grep -q silver || fail "silver bucket 不存在"
 ok "bronze/silver bucket 存在"
 
+echo "[3/10 前置] 確保 yt_categories_daily 至少成功跑過一輪（最終 review 補：Critical 2——只有這支 DAG 建 silver.youtube_categories，stg_categories.sql 這個 view 沒有它先落地會炸）"
+kubectl -n airflow exec "${AF_DEPLOY}" -- airflow dags unpause yt_categories_daily >/dev/null 2>&1 || true
+kubectl -n airflow exec "${AF_DEPLOY}" -- airflow dags trigger yt_categories_daily
+deadline=$(( $(date +%s) + 600 ))
+while :; do
+  state=$(kubectl -n airflow exec "${AF_DEPLOY}" -- airflow dags list-runs yt_categories_daily -o json 2>/dev/null | jq -r '.[0].state')
+  [ "${state}" = "success" ] && break
+  [ "${state}" = "failed" ] && fail "yt_categories_daily 前置跑 failed（silver.youtube_categories 無法建立，stg_categories 必炸）"
+  [ "$(date +%s)" -gt "$deadline" ] && fail "yt_categories_daily 前置跑未在 600s 內完成（state=${state}）"
+  sleep 10
+done
+ok "yt_categories_daily 前置完成（silver.youtube_categories 已就緒）"
+
 echo "[3/10] 觸發一輪 ${DAG_ID} 並等 success（timeout 1800s）"
 kubectl -n airflow exec "${AF_DEPLOY}" -- airflow dags unpause "${DAG_ID}" >/dev/null 2>&1 || true
+# 最終 review 補：先捕捉本次觸發用的整點小時，後面查詢一律用這個值而非查詢當下的 now()
+# ——check 5 若在觸發後、跨過下一個整點才查會誤判成 fail（假陽性）。
+TRIGGER_HOUR=$(date -u +"%Y-%m-%d %H:00:00+00")
 kubectl -n airflow exec "${AF_DEPLOY}" -- airflow dags trigger "${DAG_ID}"
 deadline=$(( $(date +%s) + 1800 ))
 while :; do
@@ -45,12 +61,14 @@ kubectl -n data exec lakehouse-minio-0 -- sh -c "find /data/bronze/${hour_path} 
   || fail "bronze 無 ${hour_path}/snapshot.json"
 ok "bronze snapshot.json 存在（${hour_path}）"
 
-echo "[5/10] Silver serving 有資料且為當前小時"
+echo "[5/10] Silver serving 有資料且為觸發時使用的整點小時"
 silver_count=$(${PGEXEC} "SELECT count(*) FROM silver.video_snapshots")
 [ "${silver_count}" -gt 0 ] || fail "silver.video_snapshots 為空"
-cur_hour=$(${PGEXEC} "SELECT count(*) FROM silver.video_snapshots WHERE captured_at = date_trunc('hour', now())")
-[ "${cur_hour}" -gt 0 ] || fail "silver 無當前小時資料（Spark→pyiceberg→loader 鏈斷）"
-ok "silver ${silver_count} 列，含當前小時 ${cur_hour} 列"
+# 最終 review 補：比對 TRIGGER_HOUR（觸發當下捕捉的整點）而非查詢當下 date_trunc('hour', now())
+# ——若驗收跑過整點邊界，now() 會跑到下一小時，跟實際那輪 dagrun 的資料對不上而假性 fail。
+cur_hour=$(${PGEXEC} "SELECT count(*) FROM silver.video_snapshots WHERE captured_at = '${TRIGGER_HOUR}'::timestamptz")
+[ "${cur_hour}" -gt 0 ] || fail "silver 無觸發小時（${TRIGGER_HOUR}）資料（Spark→pyiceberg→loader 鏈斷）"
+ok "silver ${silver_count} 列，含觸發小時 ${cur_hour} 列"
 
 echo "[6/10] Gold 5 marts（velocity 首輪放寬為表存在）"
 for mart in gold_trending_daily gold_channel_performance gold_category_daily gold_video_lifecycle; do
