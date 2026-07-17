@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lakehouse-postgres-init
+  labels: {app: lakehouse-postgres}
+data:
+  01-init.sh: |
+    #!/bin/bash
+    set -euo pipefail
+    # 角色與 database（密碼來自 Secret 注入的環境變數——因此用 .sh 而非 .sql，entrypoint 會以 shell 執行使 env 可插值）
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" <<-EOSQL
+      CREATE ROLE airflow LOGIN PASSWORD '${AIRFLOW_DB_PASSWORD}';
+      CREATE ROLE pipeline_writer LOGIN PASSWORD '${PIPELINE_DB_PASSWORD}';
+      CREATE ROLE dbt_runner LOGIN PASSWORD '${DBT_DB_PASSWORD}';
+      CREATE ROLE grafana_reader LOGIN PASSWORD '${GRAFANA_DB_PASSWORD}';
+      CREATE DATABASE airflow OWNER airflow;
+      CREATE DATABASE lakehouse;
+    EOSQL
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname lakehouse <<-EOSQL
+      CREATE SCHEMA silver AUTHORIZATION pipeline_writer;
+      CREATE SCHEMA gold AUTHORIZATION dbt_runner;
+      -- postgres:16 起 public 對非 owner 預設不可寫；Iceberg JDBC catalog 表建於 public（pipeline_writer 連線）
+      GRANT CREATE ON SCHEMA public TO pipeline_writer;
+      -- dbt 自建 staging schema 需要 database 級 CREATE
+      GRANT CREATE ON DATABASE lakehouse TO dbt_runner;
+      -- 讀取路徑：dbt 讀 silver、grafana 讀 gold、exporter（pipeline_writer 連線）讀 gold
+      GRANT USAGE ON SCHEMA silver TO dbt_runner;
+      GRANT USAGE ON SCHEMA gold TO grafana_reader;
+      GRANT USAGE ON SCHEMA gold TO pipeline_writer;
+      -- dbt 每 run 重建 table，靠 default privileges 而非一次性 GRANT（design §4 兩條）
+      ALTER DEFAULT PRIVILEGES FOR ROLE pipeline_writer IN SCHEMA silver GRANT SELECT ON TABLES TO dbt_runner;
+      ALTER DEFAULT PRIVILEGES FOR ROLE dbt_runner IN SCHEMA gold GRANT SELECT ON TABLES TO grafana_reader;
+      -- exporter 的 yt_gold_mart_rows 需要 pipeline_writer 讀 gold（§9 合約成立的必要補充，見 Self-Review 歧義 #3）
+      ALTER DEFAULT PRIVILEGES FOR ROLE dbt_runner IN SCHEMA gold GRANT SELECT ON TABLES TO pipeline_writer;
+    EOSQL

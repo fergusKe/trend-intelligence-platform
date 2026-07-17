@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lakehouse-postgres-exporter
+  labels: {app: lakehouse-postgres-exporter}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: lakehouse-postgres-exporter}
+  template:
+    metadata:
+      labels: {app: lakehouse-postgres-exporter}
+    spec:
+      containers:
+        - name: exporter
+          image: quay.io/prometheuscommunity/postgres-exporter:v0.20.1
+          args: ["--extend.query-path=/etc/queries/queries.yaml"]
+          ports:
+            - {containerPort: 9187, name: metrics}
+          env:
+            - name: PIPELINE_DB_PASSWORD
+              valueFrom: {secretKeyRef: {name: lakehouse-postgres, key: pipeline-password}}
+            - name: DATA_SOURCE_NAME
+              value: "postgresql://pipeline_writer:$(PIPELINE_DB_PASSWORD)@lakehouse-postgres.data.svc:5432/lakehouse?sslmode=disable"
+          volumeMounts:
+            - {name: queries, mountPath: /etc/queries, readOnly: true}
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 200m, memory: 128Mi}
+      volumes:
+        - name: queries
+          configMap: {name: lakehouse-exporter-queries}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lakehouse-postgres-exporter
+  labels: {app: lakehouse-postgres-exporter}
+spec:
+  type: ClusterIP
+  selector: {app: lakehouse-postgres-exporter}
+  ports:
+    - {name: metrics, port: 9187, targetPort: 9187}

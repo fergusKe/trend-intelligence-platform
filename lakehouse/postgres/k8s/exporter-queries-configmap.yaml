@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lakehouse-exporter-queries
+  labels: {app: lakehouse-postgres-exporter}
+data:
+  queries.yaml: |
+    yt_freshness:
+      query: "SELECT EXTRACT(EPOCH FROM (now() - max(ingested_at))) AS seconds FROM silver.video_snapshots"
+      master: true
+      metrics:
+        - seconds:
+            usage: "GAUGE"
+            description: "Seconds since last silver ingest"
+    yt_silver:
+      query: "SELECT region, count(*) AS rows_24h FROM silver.video_snapshots WHERE captured_at > now() - interval '24 hours' GROUP BY region"
+      master: true
+      metrics:
+        - region:
+            usage: "LABEL"
+        - rows_24h:
+            usage: "GAUGE"
+            description: "Silver rows in last 24h per region"
+    yt_gold_mart:
+      query: "SELECT 'gold_trending_daily' AS mart, count(*) AS rows FROM gold.gold_trending_daily UNION ALL SELECT 'gold_channel_performance', count(*) FROM gold.gold_channel_performance UNION ALL SELECT 'gold_category_daily', count(*) FROM gold.gold_category_daily UNION ALL SELECT 'gold_video_velocity_hourly', count(*) FROM gold.gold_video_velocity_hourly UNION ALL SELECT 'gold_video_lifecycle', count(*) FROM gold.gold_video_lifecycle"
+      master: true
+      metrics:
+        - mart:
+            usage: "LABEL"
+        - rows:
+            usage: "GAUGE"
+            description: "Row count per gold mart"
