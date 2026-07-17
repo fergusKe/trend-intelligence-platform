@@ -9,4 +9,6 @@ lakehouse:
       password: "{{ env_var('DBT_PG_PASSWORD') }}"
       dbname: lakehouse
       schema: gold
-      threads: 4
+      # threads 4→2：16GB M4 節點記憶體吃緊，4 執行緒平行建 table model 的峰值會觸 dbt pod OOM。
+      # 只 7 個 model、資料量小（gold 各數百列），2 執行緒足夠且直接砍實際記憶體峰值（搭配 pod limit 1Gi）。
+      threads: 2

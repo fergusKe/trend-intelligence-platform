@@ -131,8 +131,12 @@ def make_dbt_operator(task_id: str, shell_command: str) -> KubernetesPodOperator
                         secret="lakehouse-postgres", key="dbt-password")],
         get_logs=True,
         on_finish_action="delete_pod",
+        # memory limit 512Mi→1Gi：dbt 同時建 5 個 table model + parse，峰值在 16GB M4 節點
+        # 記憶體吃緊時貼近 512Mi → kernel 在 cgroup 邊界 OOM-kill dbt pod（gold 其實已寫出、
+        # 計數前進，但 task 被標失敗重試）。給 1Gi burst headroom 消除此失敗模式；request 維持
+        # 256Mi 不佔排程額度（limit≠usage，dbt 實際多在 ~500–700Mi）。搭配 profiles threads 4→2 降實際峰值。
         container_resources={
             "requests": {"cpu": "100m", "memory": "256Mi"},
-            "limits": {"cpu": "500m", "memory": "512Mi"},
+            "limits": {"cpu": "500m", "memory": "1Gi"},
         },
     )
