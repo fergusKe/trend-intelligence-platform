@@ -2,6 +2,7 @@
 import re
 from pathlib import Path
 
+import pytest
 import yaml
 from airflow.models import DagBag
 
@@ -54,6 +55,10 @@ def test_categories_and_reprocess_guards():
     assert {"start_hour", "end_hour"} <= set(rp.params)
 
 
+@pytest.mark.skipif(
+    not (REPO_ROOT / "lakehouse/dbt/models/staging/_staging_schema.yml").exists(),
+    reason="等 Task 12 的 dbt staging schema 檔落地後自動啟用",
+)
 def test_regions_single_source_of_truth_vs_dbt():
     pipeline = yaml.safe_load((DAGS_DIR / "config" / "pipeline.yaml").read_text())
     regions = pipeline["regions"]
