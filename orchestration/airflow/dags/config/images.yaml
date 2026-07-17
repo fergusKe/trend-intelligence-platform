@@ -1,6 +1,6 @@
 spark_job:
   repository: ghcr.io/ferguske/trend-intelligence-platform/spark-jobs
-  tag: sha-0000000   # spark-ci bump
+  tag: sha-4f87243 # spark-ci bump
 dbt:
   repository: ghcr.io/ferguske/trend-intelligence-platform/dbt
-  tag: sha-0000000   # dbt-ci bump
+  tag: sha-0000000 # dbt-ci bump
