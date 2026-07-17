@@ -1,0 +1,87 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: airflow
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  project: default
+  source:
+    repoURL: https://airflow.apache.org
+    chart: airflow
+    targetRevision: 1.22.0
+    helm:
+      valuesObject:
+        executor: KubernetesExecutor
+        postgresql:
+          enabled: false            # metadata 走共用 Postgres 的 airflow db（一套 Postgres 紀律）
+        metadataSecretName: lakehouse-postgres   # chart 約定 key 名 connection（§8）
+        webserverSecretKeySecretName: airflow-webserver-secret
+        images:
+          airflow:
+            repository: ghcr.io/ferguske/trend-intelligence-platform/airflow
+            tag: sha-0000000        # 佔位；airflow-ci bump
+        dags:
+          gitSync:
+            enabled: true
+            repo: https://github.com/fergusKe/trend-intelligence-platform
+            branch: main
+            subPath: orchestration/airflow/dags
+        ingress:
+          apiServer:
+            enabled: true
+            ingressClassName: nginx
+            hosts:
+              - name: airflow.localtest.me
+        statsd:
+          enabled: true
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 200m, memory: 128Mi}
+        secret:
+          - envName: YOUTUBE_API_KEY
+            secretName: youtube-api
+            secretKey: YOUTUBE_API_KEY
+          - envName: AWS_ACCESS_KEY_ID
+            secretName: minio-root
+            secretKey: AWS_ACCESS_KEY_ID
+          - envName: AWS_SECRET_ACCESS_KEY
+            secretName: minio-root
+            secretKey: AWS_SECRET_ACCESS_KEY
+          - envName: LAKEHOUSE_PG_DSN
+            secretName: lakehouse-postgres
+            secretKey: pipeline-dsn
+        scheduler:
+          resources:
+            requests: {cpu: 250m, memory: 512Mi}
+            limits: {cpu: "1", memory: 1Gi}
+        dagProcessor:
+          resources:
+            requests: {cpu: 200m, memory: 512Mi}
+            limits: {cpu: "1", memory: 1Gi}
+        apiServer:
+          resources:
+            requests: {cpu: 200m, memory: 512Mi}
+            limits: {cpu: "1", memory: 1Gi}
+        triggerer:
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: 500m, memory: 512Mi}
+        workers:
+          resources:              # KubernetesExecutor ephemeral task pod（含 ingest ×8）
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: "1", memory: 512Mi}
+        createUserJob:
+          useHelmHooks: false
+          applyCustomEnv: false
+        migrateDatabaseJob:
+          useHelmHooks: false
+          applyCustomEnv: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: airflow
+  syncPolicy:
+    automated: {prune: true, selfHeal: true}
+    syncOptions: [CreateNamespace=true]
+    retry: {limit: 10, backoff: {duration: 15s, factor: 2, maxDuration: 3m}}
