@@ -1,4 +1,4 @@
-.PHONY: cluster-up cluster-down cluster-stop cluster-start verify argocd-ui pipeline-secrets pipeline-verify pipeline-trigger demo-p1-up demo-p1-down
+.PHONY: cluster-up cluster-down cluster-stop cluster-start verify argocd-ui pipeline-secrets pipeline-verify pipeline-trigger demo-p1-up demo-p1-down dev-lean-down dev-lean-up
 ARGOCD_VERSION := v3.4.4
 
 cluster-up:            ## 一鍵：叢集 → ArgoCD → root app（之後全靠 GitOps 收斂）
@@ -49,3 +49,19 @@ demo-p1-down:          ## 暫停 P1 重量元件（GitOps 相容：關 auto-sync
 demo-p1-up:            ## 恢復：重開 auto-sync，ArgoCD selfHeal 收斂回來（1-3 分鐘）
 	kubectl -n argocd patch application airflow --type merge -p '{"spec":{"syncPolicy":{"automated":{"prune":true,"selfHeal":true}}}}'
 	kubectl -n argocd patch application spark-operator --type merge -p '{"spec":{"syncPolicy":{"automated":{"prune":true,"selfHeal":true}}}}'
+
+dev-lean-down:         ## 開發精簡：縮非必要 app（監控/hello）騰記憶體，保留 P1 需要的 airflow/spark/postgres/minio。16GB M4 開發預設
+	# 先關 app-of-apps 的 platform-root auto-sync——否則 selfHeal 會把子 app 的 automated 補回、復活被縮的 workload。
+	kubectl -n argocd patch application platform-root --type merge -p '{"spec":{"syncPolicy":{"automated":null}}}'
+	# 再逐一關子 app auto-sync 並縮 0（monitoring 三件走 monitoring ns；hello 走 apps ns）。node-exporter DaemonSet 各 ~50Mi 留著不動。
+	for app in monitoring monitoring-dashboards pipeline-monitoring hello; do \
+		kubectl -n argocd patch application $$app --type merge -p '{"spec":{"syncPolicy":{"automated":null}}}'; \
+	done
+	kubectl -n monitoring scale deploy,statefulset --all --replicas=0 || true
+	kubectl -n apps scale deploy,statefulset --all --replicas=0 || true
+
+dev-lean-up:           ## 恢復全套：重開 platform-root ＋ 各子 app auto-sync，ArgoCD selfHeal 收斂回來（1-3 分鐘）
+	kubectl -n argocd patch application platform-root --type merge -p '{"spec":{"syncPolicy":{"automated":{"prune":true,"selfHeal":true}}}}'
+	for app in monitoring monitoring-dashboards pipeline-monitoring hello; do \
+		kubectl -n argocd patch application $$app --type merge -p '{"spec":{"syncPolicy":{"automated":{"prune":true,"selfHeal":true}}}}'; \
+	done
