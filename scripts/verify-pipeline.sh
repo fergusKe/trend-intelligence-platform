@@ -12,8 +12,10 @@ DAG_ID="yt_trending_hourly"
 # 污染 `-o json` 輸出（JSON 前多 6 行時間戳 log）→ jq 直接 parse error。
 # 濾掉開頭 ISO 時間戳（^YYYY-MM-DDThh…）的 log 行，只留乾淨 JSON 再交給 jq。
 list_runs_json() {  # $1=dag_id → 印去 log 後的乾淨 JSON 陣列
+  # 結尾 || true：set -euo pipefail 下，若某輪 exec 暫態只回 log 行、grep -vE 濾空會 exit 1，
+  # pipefail 會讓整支 verify 崩掉（Error 1、無 ❌）。暫態空讀應「當作還沒好、繼續輪詢」，非致命。
   kubectl -n airflow exec "${AF_DEPLOY}" -- airflow dags list-runs "$1" -o json 2>/dev/null \
-    | grep -vE '^[0-9]{4}-[0-9]{2}-[0-9]{2}T'
+    | grep -vE '^[0-9]{4}-[0-9]{2}-[0-9]{2}T' || true
 }
 
 echo "[1/10] ArgoCD apps 收斂（10 個，timeout 900s）"
