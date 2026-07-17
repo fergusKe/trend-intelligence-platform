@@ -28,6 +28,9 @@ spec:
             repo: https://github.com/fergusKe/trend-intelligence-platform
             branch: main
             subPath: orchestration/airflow/dags
+            resources:
+              requests: {cpu: 10m, memory: 64Mi}
+              limits: {cpu: 50m, memory: 128Mi}
         ingress:
           apiServer:
             enabled: true

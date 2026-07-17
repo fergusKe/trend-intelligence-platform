@@ -1,5 +1,4 @@
 """DagBag import + 依賴鏈 + 守門 + config 一致性（design §11）。"""
-import re
 from pathlib import Path
 
 import pytest

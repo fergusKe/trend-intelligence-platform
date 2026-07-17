@@ -2013,6 +2013,14 @@ with DAG(
     ingest >> delete_stale_sparkapp() >> spark >> load_silver_to_postgres() >> dbt_run >> dbt_test
 ```
 
+> **（最終 review 勘誤：data_interval_start 需 start_of('hour')；captured_at 改 logical_hour 時鐘——實作已修）**
+> 手動觸發（Airflow API/CLI `dags trigger`）的 `data_interval_start` 精確到秒，非整點；上面
+> `ingest_trending`/`delete_stale_sparkapp`/`load_silver_to_postgres` 三處直接消費它的地方，實作皆已
+> 改為 `ctx["data_interval_start"].start_of("hour")` 再用，確保排程觸發與手動觸發共用同一支乾淨的
+> 整點時鐘（否則 `load_silver_to_postgres` 的 `[hour, hour]` 掃描窗會對不上 Spark 寫入的整點
+> `captured_at`，`n == 0` guard 必炸——這連帶牽動下面 Task 11 的 silver_job.py，見該處勘誤）。
+> 未來階段複製這段 pattern 時，一律先 `start_of("hour")` 再消費 `data_interval_start`。
+
 - [ ] **Step 3: 建 yt_categories_daily.py**
 
 Create `orchestration/airflow/dags/yt_categories_daily.py`：
@@ -2601,6 +2609,15 @@ def main() -> None:
 if __name__ == "__main__":
     main()
 ```
+
+> **（最終 review 勘誤：data_interval_start 需 start_of('hour')；captured_at 改 logical_hour 時鐘——實作已修）**
+> `transform()` 原規格用 `F.date_trunc("hour", F.col("ingested_at"))` 導出 `captured_at`——排程延遲
+> 跨過整點邊界時，`ingested_at`（wall clock）會落到下一小時，導致 `captured_at` 誤判分區、被下一輪
+> `overwritePartitions` 靜默覆寫掉正確小時的資料。實作已改為
+> `F.date_trunc("hour", F.to_timestamp("_metadata.logical_hour"))`——`logical_hour` 是 Bronze 信封裡
+> 由 Airflow `data_interval_start` 決定性導出的欄位（見上面 Task 9 勘誤），與 bronze key、loader 掃描窗
+> 共用同一支時鐘；`date_trunc` 保留作防禦性寫法。`test_silver_job.py` 已加一條
+> `ingested_at`/`logical_hour` 跨小時的 case 覆蓋此行為。
 
 - [ ] **Step 5: 跑測試確認綠 + lint**
 
@@ -3774,6 +3791,22 @@ git commit -m "驗收(pipeline)：verify-pipeline.sh 十檢查 + make pipeline-v
 - Consumes: 前 14 task 全部產物。
 - Produces: 完整可重現的 P1 管線（`make pipeline-verify` 十項全綠）+ 文件化 runbook + live 校準收尾。
 
+- [ ] **Step 0（M4，最終 review 補）：merge 前先佈 secrets**
+
+ArgoCD app-of-apps 在 Step 1 的 merge 一落地就會開始 sync `airflow` app（wave 5）；若此時
+`youtube-api`/`lakehouse-postgres`/`airflow-webserver-secret` 等 secret 還不存在，
+`migrateDatabaseJob`/`createUserJob` 會因缺 secret **永久失敗**（一次性 Job，失敗不會自動重跑，
+必須人工刪除重建）。因此在 Step 1 觸發 merge **之前**，先在 M4 佈好 secrets：
+
+```bash
+ssh 100.74.192.11
+cd /Users/fergus/Desktop/workshop/fergus/data-workshop/fergus/trend-intelligence-platform
+git pull --rebase origin main   # 此時分支尚未合入亦可先跑；secret 生成不依賴 repo 內容
+PATH=/tmp/bin:/opt/homebrew/bin:/usr/bin:/bin make pipeline-secrets YOUTUBE_API_KEY=<真 key>
+```
+Expected: `pipeline-secrets 就緒` 訊息（含 monitoring ns 的 grafana-lakehouse-reader）；此步驟冪等，
+Step 2 重跑同一指令不會輪替既有密碼。
+
 - [ ] **Step 1: 合回 main 觸發三支 CI**
 
 M1 本機（分支 → merge；直推 main 亦可，沿 P0 慣例）：
@@ -3796,6 +3829,14 @@ PATH=/tmp/bin:/opt/homebrew/bin:/usr/bin:/bin kubectl -n argocd get applications
 ```
 Expected: 10 個 Application 全 Synced+Healthy；`minio-bucket-init` Job 跑完自刪。
 
+**（最終 review 補）**：secrets 已在 Step 0 先佈，`migrateDatabaseJob`/`createUserJob` 應可正常跑完；
+但 `airflow` app 在 Step 1 三支 CI 的 bump commit 落地前，image tag 仍是佔位 `sha-0000000`，
+worker/scheduler/webserver pod 會停在 `ImagePullBackOff`——這是預期的暫時態。等 CI bump 落地、
+ArgoCD 偵測到 `platform/argocd/apps/airflow.yaml` 變更後會自動重新 sync 到新 tag；但**先前已失敗
+的 Job Pod（migrateDatabaseJob/createUserJob）因 Job spec 未變不會自動重建**（K8s Job 語意：同名
+Job 完成/失敗後不重跑），若收斂後仍卡著，需人工 `kubectl -n airflow delete job <job-name>` 讓
+ArgoCD selfHeal 重建，或 `argocd app sync airflow` 手動觸發。
+
 - [ ] **Step 3: （M4）live 校準清單（Task 0 標「live 複核」項，逐一收尾）**
 
 ```bash
@@ -3816,6 +3857,15 @@ sleep 3 && curl -s localhost:19102/metrics | grep -E "^airflow_(ti|dagrun)" | he
 curl -fsS -u "admin:$(PATH=/tmp/bin:/opt/homebrew/bin:/usr/bin:/bin kubectl -n monitoring get secret monitoring-grafana -o jsonpath='{.data.admin-password}' | base64 -d)" \
   "http://grafana.localtest.me/api/datasources/uid/lakehouse-postgres" | jq '.name'
 #    預期 "Lakehouse"；panel 查詢失敗多半是 $password env 未展開 → 檢 envFromSecrets 是否生效（Task 0 C4）
+# g)（最終 review 補）SparkApplication retry-conflict 行為：
+#    故意讓一輪 spark_bronze_to_silver 失敗一次、觀察 Airflow task retry 重新 apply 同名 SparkApplication
+#    時的行為——舊物件的 timeToLiveSeconds 是 3600，重試通常遠早於此，物件大機率還在。觀察
+#    spark-operator 對同名重新 apply 是重新 attach／覆蓋既有物件，還是回 409 Conflict（already exists）。
+#    若為後者：目前「先刪同名舊物件」只在 delete_stale_sparkapp（任務開頭跑一次）做，task 內部的
+#    retry 不會重跑它 → 把 delete-stale 邏輯移進 retry path（例如 SparkKubernetesOperator 的
+#    on_retry_callback，或把 delete_stale_sparkapp 併入 spark task 本身、每次嘗試前都跑一次），
+#    避免重試迴圈卡死在 409。
+PATH=/tmp/bin:/opt/homebrew/bin:/usr/bin:/bin kubectl -n data get sparkapplications -w   # 觀察視窗
 ```
 
 - [ ] **Step 4: （M4）端到端驗收**
