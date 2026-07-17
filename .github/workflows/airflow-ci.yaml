@@ -1,0 +1,72 @@
+name: airflow-ci
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ingestion/**"
+      - "orchestration/airflow/Dockerfile"
+      # 刻意不含 orchestration/airflow/dags/**（DAG 走 git-sync 即生效，不 rebuild image）
+      # 刻意不含 platform/argocd/apps/airflow.yaml（bump 落點）→ 迴圈防護
+  workflow_dispatch: {}
+concurrency:
+  group: airflow-ci
+  cancel-in-progress: false
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v8.3.2
+        with: {python-version: "3.12"}
+      - name: ingest 單元測試
+        run: |
+          uv sync
+          uv run ruff check .
+          uv run pytest tests/ -v
+        working-directory: ingestion/youtube
+      - name: DagBag import 測試（airflow + constraints）
+        run: |
+          uv venv /tmp/af-venv
+          source /tmp/af-venv/bin/activate
+          uv pip install "apache-airflow==3.2.2" "apache-airflow-providers-cncf-kubernetes" \
+            --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-3.2.2/constraints-3.12.txt"
+          uv pip install ./ingestion/youtube "pytest==9.1.1" "pyyaml==6.0.3"
+          pytest orchestration/airflow/tests/ -v
+
+  build-push-bump:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - id: vars
+        run: |
+          echo "TAG=sha-$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
+          echo "IMAGE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')/airflow" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: orchestration/airflow/Dockerfile
+          platforms: linux/amd64,linux/arm64   # arm64 必備（M4 kind 節點；勘誤 §F）
+          push: true
+          tags: |
+            ${{ steps.vars.outputs.IMAGE }}:${{ steps.vars.outputs.TAG }}
+            ${{ steps.vars.outputs.IMAGE }}:latest
+      - name: Bump manifest tag（GitOps 交棒點）
+        run: |
+          yq -i '.spec.source.helm.valuesObject.images.airflow.tag = "${{ steps.vars.outputs.TAG }}"' platform/argocd/apps/airflow.yaml
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add platform/argocd/apps/airflow.yaml
+          git commit -m "ci(airflow): bump image to ${{ steps.vars.outputs.TAG }} [skip ci]"
+          git pull --rebase origin main
+          git push origin main
