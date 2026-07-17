@@ -1,4 +1,4 @@
-.PHONY: cluster-up cluster-down cluster-stop cluster-start verify argocd-ui
+.PHONY: cluster-up cluster-down cluster-stop cluster-start verify argocd-ui pipeline-secrets pipeline-verify pipeline-trigger demo-p1-up demo-p1-down
 ARGOCD_VERSION := v3.4.4
 
 cluster-up:            ## 一鍵：叢集 → ArgoCD → root app（之後全靠 GitOps 收斂）
@@ -26,3 +26,7 @@ verify:
 argocd-ui:             ## port-forward + 印初始密碼
 	@kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d; echo
 	kubectl -n argocd port-forward svc/argocd-server 8081:443
+
+pipeline-secrets:      ## make pipeline-secrets YOUTUBE_API_KEY=<key>（冪等；命令式、不進 git）
+	@test -n "$(YOUTUBE_API_KEY)" || { echo "用法：make pipeline-secrets YOUTUBE_API_KEY=<key>"; exit 1; }
+	./scripts/pipeline-secrets.sh "$(YOUTUBE_API_KEY)"
