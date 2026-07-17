@@ -17,9 +17,10 @@ def spark():
     s.stop()
 
 
-def envelope(region="TW", ingested="2026-07-08T14:03:21+00:00", items=None):
+def envelope(region="TW", ingested="2026-07-08T14:03:21+00:00",
+             logical_hour="2026-07-08T14:00:00+00:00", items=None):
     return {
-        "_metadata": {"region": region, "logical_hour": "2026-07-08T14:00:00+00:00",
+        "_metadata": {"region": region, "logical_hour": logical_hour,
                        "ingestion_id": f"{region}_2026070814", "ingested_at": ingested,
                        "source": "youtube_data_api_v3"},
         "response": {"items": items if items is not None else [
@@ -46,12 +47,23 @@ def test_transform_columns_and_formulas(spark, tmp_path):
     assert df.columns == SILVER_COLUMNS
     row = df.collect()[0]
     assert row.video_id == "vid1" and row.region == "TW"
-    assert row.captured_at.isoformat().startswith("2026-07-08T14:00:00")  # date_trunc hour
+    assert row.captured_at.isoformat().startswith("2026-07-08T14:00:00")  # date_trunc(logical_hour)
     assert row.tags == "a,b"
     assert row.views == 1000 and row.likes == 100 and row.comment_count == 50
     assert row.like_ratio == pytest.approx(0.1)
     assert row.engagement_rate == pytest.approx(0.15)
     assert row.description == "d1"  # 範本漏抓、本設計補上的 P2b 語料欄
+
+
+def test_captured_at_follows_logical_hour_not_ingested_at(spark, tmp_path):
+    # 最終 review 補（Critical 1b）：排程延遲跨過整點邊界，ingested_at（wall clock）落在
+    # logical_hour 的下一小時——captured_at 必須跟著 logical_hour 走，否則會誤判分區、
+    # 被下一輪 overwritePartitions 靜默覆寫掉正確小時的資料。
+    env = envelope(ingested="2026-07-08T15:02:00+00:00", logical_hour="2026-07-08T14:00:00+00:00")
+    path = write_fixture(tmp_path, "late.json", env)
+    row = transform(read_bronze(spark, [path])).collect()[0]
+    assert row.captured_at.isoformat().startswith("2026-07-08T14:00:00")  # 跟 logical_hour
+    assert row.ingested_at.isoformat().startswith("2026-07-08T15:02:00")  # 保留原始 wall clock
 
 
 def test_zero_views_gives_zero_ratios(spark, tmp_path):

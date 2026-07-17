@@ -104,12 +104,18 @@ def transform(df: DataFrame) -> DataFrame:
         F.col("_metadata.region").alias("region"),
         F.col("_metadata.ingestion_id").alias("ingestion_id"),
         F.to_timestamp("_metadata.ingested_at").alias("ingested_at"),
+        # 最終 review 修（Critical 1b）：captured_at 改由信封的 logical_hour 導出（非
+        # wall-clock ingested_at）——排程延遲跨過整點邊界時，ingested_at 會落到下一小時，
+        # 造成 captured_at 誤判分區、被下一輪 overwritePartitions 靜默覆寫。logical_hour
+        # 由 Airflow data_interval_start 決定性導出，與 bronze key、loader 掃描窗共用同一
+        # 小時時鐘；date_trunc 再截一次是防禦性寫法（即使上游未截整點也安全）。
+        F.date_trunc("hour", F.to_timestamp("_metadata.logical_hour")).alias("captured_at"),
         F.explode("response.items").alias("item"),
     )
     out = items.select(
         F.col("item.id").alias("video_id"),
         "region",
-        F.date_trunc("hour", F.col("ingested_at")).alias("captured_at"),
+        "captured_at",
         F.col("item.snippet.title").alias("title"),
         F.col("item.snippet.description").alias("description"),
         F.array_join(F.col("item.snippet.tags"), ",").alias("tags"),

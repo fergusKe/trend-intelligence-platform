@@ -32,7 +32,10 @@ def ingest_trending(region: str) -> str:
     from yt_ingest.client import QuotaExceededError, YouTubeClient
 
     ctx = get_current_context()
-    logical_hour = ctx["data_interval_start"]
+    # 最終 review 修：手動觸發 data_interval_start 精確到秒（非整點），Spark 端
+    # captured_at 走小時時鐘（見 delete_stale_sparkapp/load_silver_to_postgres 同款
+    # start_of("hour")）——這裡也對齊，讓 bronze _metadata.logical_hour 本身即為整點。
+    logical_hour = ctx["data_interval_start"].start_of("hour")
     client = YouTubeClient(api_key=os.environ["YOUTUBE_API_KEY"])
     try:
         resp = client.fetch_trending(region=region, max_results=PIPELINE["max_results"])
@@ -52,7 +55,7 @@ def delete_stale_sparkapp():
     from kubernetes import client, config
 
     ctx = get_current_context()
-    name = "yt-silver-" + ctx["data_interval_start"].strftime("%Y%m%d%H")
+    name = "yt-silver-" + ctx["data_interval_start"].start_of("hour").strftime("%Y%m%d%H")
     config.load_incluster_config()
     api = client.CustomObjectsApi()
     try:
@@ -68,7 +71,10 @@ def delete_stale_sparkapp():
 @task
 def load_silver_to_postgres() -> int:
     ctx = get_current_context()
-    hour = ctx["data_interval_start"]
+    # 最終 review 修（Critical 1）：手動觸發 data_interval_start 精確到秒，[hour,hour] 掃描窗
+    # 若不截斷到整點，與 Spark 寫入的整點 captured_at 對不上、n==0 guard 必然炸——用同一支
+    # 乾淨小時鐘（start_of("hour")）餵 loader 掃描窗。
+    hour = ctx["data_interval_start"].start_of("hour")
     n = load_hours_to_postgres(hour, hour)
     if n == 0:
         raise RuntimeError(f"silver scan 為空（hour={hour.isoformat()}）——Spark 未產出？")
