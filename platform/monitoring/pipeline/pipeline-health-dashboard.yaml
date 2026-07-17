@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-pipeline-health
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  pipeline-health.json: |
+    {
+      "uid": "yt-pipeline-health",
+      "title": "YT Pipeline Health",
+      "schemaVersion": 39,
+      "editable": true,
+      "time": {"from": "now-24h", "to": "now"},
+      "refresh": "1m",
+      "panels": [
+        {"id": 1, "title": "Silver freshness (s)", "type": "stat",
+         "gridPos": {"h": 6, "w": 6, "x": 0, "y": 0},
+         "datasource": {"type": "prometheus", "uid": "prometheus"},
+         "fieldConfig": {"defaults": {"thresholds": {"steps": [
+           {"color": "green", "value": null}, {"color": "orange", "value": 10800}, {"color": "red", "value": 21600}]}}},
+         "targets": [{"refId": "A", "expr": "yt_freshness_seconds"}]},
+        {"id": 2, "title": "Task failures (1h increase)", "type": "timeseries",
+         "gridPos": {"h": 6, "w": 9, "x": 6, "y": 0},
+         "datasource": {"type": "prometheus", "uid": "prometheus"},
+         "targets": [{"refId": "A", "expr": "increase(airflow_ti_failures[1h])"}]},
+        {"id": 3, "title": "DAG run duration (s)", "type": "timeseries",
+         "gridPos": {"h": 6, "w": 9, "x": 15, "y": 0},
+         "datasource": {"type": "prometheus", "uid": "prometheus"},
+         "targets": [{"refId": "A", "expr": "airflow_dagrun_duration_success{dag_id=\"yt_trending_hourly\"}"}]},
+        {"id": 4, "title": "Silver rows 24h by region", "type": "timeseries",
+         "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
+         "datasource": {"type": "prometheus", "uid": "prometheus"},
+         "targets": [{"refId": "A", "expr": "yt_silver_rows_24h", "legendFormat": "{{region}}"}]},
+        {"id": 5, "title": "Gold mart rows", "type": "timeseries",
+         "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
+         "datasource": {"type": "prometheus", "uid": "prometheus"},
+         "targets": [{"refId": "A", "expr": "yt_gold_mart_rows", "legendFormat": "{{mart}}"}]}
+      ]
+    }

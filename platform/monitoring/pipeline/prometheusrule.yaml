@@ -1,0 +1,31 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: yt-pipeline
+  namespace: monitoring
+  labels: {app: yt-pipeline}
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  groups:
+    - name: yt-pipeline
+      rules:
+        - alert: YTDataStale
+          expr: yt_freshness_seconds > 10800
+          for: 10m
+          labels: {severity: warning}
+          annotations: {summary: "Silver 資料超過 3 小時未更新"}
+        - alert: YTDataStaleCritical
+          expr: yt_freshness_seconds > 21600
+          for: 10m
+          labels: {severity: critical}
+          annotations: {summary: "Silver 資料超過 6 小時未更新"}
+        - alert: YTPipelineTaskFailures
+          expr: increase(airflow_ti_failures[1h]) > 0
+          labels: {severity: warning}
+          annotations: {summary: "Airflow task 過去 1h 有失敗（含 dbt_test DQ gate）"}
+        - alert: LakehouseComponentDown
+          expr: up{job=~"lakehouse-minio|lakehouse-postgres-exporter"} == 0
+          for: 5m
+          labels: {severity: critical}
+          annotations: {summary: "儲存底座元件 down（{{ $labels.job }}）"}

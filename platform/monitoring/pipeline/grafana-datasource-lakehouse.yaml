@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasource-lakehouse
+  namespace: monitoring
+  labels:
+    grafana_datasource: "1"
+data:
+  lakehouse-datasource.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Lakehouse
+        uid: lakehouse-postgres
+        type: postgres
+        access: proxy
+        url: lakehouse-postgres.data.svc:5432
+        user: grafana_reader
+        jsonData:
+          database: lakehouse
+          sslmode: disable
+        secureJsonData:
+          password: $password

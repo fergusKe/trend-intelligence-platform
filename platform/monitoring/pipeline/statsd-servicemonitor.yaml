@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: airflow-statsd
+  namespace: monitoring
+  labels: {app: airflow-statsd}
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  namespaceSelector:
+    matchNames: [airflow]
+  selector:
+    matchLabels: {tier: airflow, component: statsd}
+  endpoints:
+    - {port: statsd-scrape, path: /metrics, interval: 30s}
