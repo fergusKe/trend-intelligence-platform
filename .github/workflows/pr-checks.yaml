@@ -4,6 +4,9 @@ on:
     paths:
       - "platform/hello/**"        # 含 k8s/**：manifest 改動也要過閘
       - "platform/argocd/**"
+      - "ingestion/**"
+      - "orchestration/airflow/**"
+      - "lakehouse/**"
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -27,3 +30,40 @@ jobs:
             echo "可攜鐵律違反：發現專屬 annotation 或 storageClassName"; exit 1
           fi
           echo "portability OK"
+  test-ingestion-dags:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v8.3.2
+        with: {python-version: "3.12"}
+      - run: |
+          uv sync && uv run ruff check . && uv run pytest tests/ -v
+        working-directory: ingestion/youtube
+      - run: |
+          uv venv /tmp/af-venv
+          source /tmp/af-venv/bin/activate
+          uv pip install "apache-airflow==3.2.2" "apache-airflow-providers-cncf-kubernetes" \
+            --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-3.2.2/constraints-3.12.txt"
+          uv pip install ./ingestion/youtube "pytest==9.1.1" "pyyaml==6.0.3"
+          pytest orchestration/airflow/tests/ -v
+  test-spark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with: {distribution: temurin, java-version: "17"}
+      - uses: astral-sh/setup-uv@v8.3.2
+        with: {python-version: "3.12"}
+      - run: uv sync && uv run pytest tests/ -v
+        working-directory: lakehouse/spark
+  test-dbt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v8.3.2
+        with: {python-version: "3.12"}
+      - run: |
+          uv venv /tmp/dbt-venv && source /tmp/dbt-venv/bin/activate
+          uv pip install dbt-postgres==1.10.2
+          DBT_PG_PASSWORD=dummy dbt parse --profiles-dir . --project-dir .
+        working-directory: lakehouse/dbt

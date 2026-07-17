@@ -30,3 +30,20 @@ argocd-ui:             ## port-forward + 印初始密碼
 pipeline-secrets:      ## make pipeline-secrets YOUTUBE_API_KEY=<key>（冪等；命令式、不進 git）
 	@test -n "$(YOUTUBE_API_KEY)" || { echo "用法：make pipeline-secrets YOUTUBE_API_KEY=<key>"; exit 1; }
 	./scripts/pipeline-secrets.sh "$(YOUTUBE_API_KEY)"
+
+pipeline-verify:       ## P1 端到端 10 檢查（前置：make verify 綠 + pipeline-secrets 已跑）
+	./scripts/verify-pipeline.sh
+
+pipeline-trigger:      ## 手動觸發一輪主 DAG
+	kubectl -n airflow exec deploy/airflow-api-server -- airflow dags trigger yt_trending_hourly
+
+demo-p1-down:          ## 暫停 P1 重量元件（GitOps 相容：關 auto-sync 再縮 0；騰記憶體給 host 重活）
+	kubectl -n argocd patch application airflow --type merge -p '{"spec":{"syncPolicy":{"automated":null}}}'
+	kubectl -n airflow scale deploy --all --replicas=0
+	kubectl -n airflow scale statefulset --all --replicas=0
+	kubectl -n argocd patch application spark-operator --type merge -p '{"spec":{"syncPolicy":{"automated":null}}}'
+	kubectl -n spark-operator scale deploy --all --replicas=0
+
+demo-p1-up:            ## 恢復：重開 auto-sync，ArgoCD selfHeal 收斂回來（1-3 分鐘）
+	kubectl -n argocd patch application airflow --type merge -p '{"spec":{"syncPolicy":{"automated":{"prune":true,"selfHeal":true}}}}'
+	kubectl -n argocd patch application spark-operator --type merge -p '{"spec":{"syncPolicy":{"automated":{"prune":true,"selfHeal":true}}}}'
