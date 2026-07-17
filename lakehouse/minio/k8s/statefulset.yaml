@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: lakehouse-minio
+  labels: {app: lakehouse-minio}
+spec:
+  serviceName: lakehouse-minio
+  replicas: 1
+  selector:
+    matchLabels: {app: lakehouse-minio}
+  template:
+    metadata:
+      labels: {app: lakehouse-minio}
+    spec:
+      containers:
+        - name: minio
+          image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+          args: ["server", "/data"]
+          ports:
+            - {containerPort: 9000, name: s3}
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom: {secretKeyRef: {name: minio-root, key: AWS_ACCESS_KEY_ID}}
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom: {secretKeyRef: {name: minio-root, key: AWS_SECRET_ACCESS_KEY}}
+            - name: MINIO_PROMETHEUS_AUTH_TYPE
+              value: "public"   # ServiceMonitor 免 bearer token scrape（單機 demo，ClusterIP 不外露）
+          volumeMounts:
+            - {name: data, mountPath: /data}
+          readinessProbe:
+            httpGet: {path: /minio/health/ready, port: s3}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests: {cpu: 250m, memory: 512Mi}
+            limits: {cpu: "1", memory: 1Gi}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests: {storage: 10Gi}

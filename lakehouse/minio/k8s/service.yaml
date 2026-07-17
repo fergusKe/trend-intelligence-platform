@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: lakehouse-minio
+  labels: {app: lakehouse-minio}
+spec:
+  type: ClusterIP
+  selector: {app: lakehouse-minio}
+  ports:
+    - {name: s3, port: 9000, targetPort: 9000}

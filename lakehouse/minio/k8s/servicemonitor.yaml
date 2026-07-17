@@ -1,0 +1,12 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: lakehouse-minio
+  labels: {app: lakehouse-minio}
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  selector:
+    matchLabels: {app: lakehouse-minio}
+  endpoints:
+    - {port: s3, path: /minio/v2/metrics/cluster, interval: 30s}
