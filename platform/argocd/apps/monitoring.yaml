@@ -17,6 +17,7 @@ spec:
           prometheusSpec:
             serviceMonitorSelectorNilUsesHelmValues: false
             podMonitorSelectorNilUsesHelmValues: false
+            ruleSelectorNilUsesHelmValues: false  # PrometheusRule 不綁 release label（與上兩行同姿勢；P1 pipeline 告警與後續 SLO rules 都靠它）
             serviceMonitorNamespaceSelector: {}
             retention: 24h
             # storageSpec 刻意不設 → emptyDir（可攜鐵律；EKS 版見 README）
