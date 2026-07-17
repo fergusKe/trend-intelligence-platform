@@ -15,7 +15,7 @@ from airflow.sdk.exceptions import AirflowFailException
 # （只有 BundleDagBag 這條生產路徑才會）；本機把 dags/ 加進 sys.path 讓同層
 # 共用模組 `_yt_common` 可被 import（design 假設落地時的必要修正，見 _yt_common.py docstring）。
 sys.path.insert(0, str(Path(__file__).parent))
-from _yt_common import IMAGES, PIPELINE, _pg_password, load_hours_to_postgres, make_dbt_operator  # noqa: E402
+from _yt_common import IMAGES, PIPELINE, _pg_password, load_hours_to_postgres, make_dbt_operator, resolve_run_anchor  # noqa: E402
 
 DEFAULT_ARGS = {
     "retries": 3,
@@ -32,10 +32,10 @@ def ingest_trending(region: str) -> str:
     from yt_ingest.client import QuotaExceededError, YouTubeClient
 
     ctx = get_current_context()
-    # 最終 review 修：手動觸發 data_interval_start 精確到秒（非整點），Spark 端
-    # captured_at 走小時時鐘（見 delete_stale_sparkapp/load_silver_to_postgres 同款
-    # start_of("hour")）——這裡也對齊，讓 bronze _metadata.logical_hour 本身即為整點。
-    logical_hour = ctx["data_interval_start"].start_of("hour")
+    # 時間錨走 resolve_run_anchor（排程用 data_interval_start；手動觸發 Airflow 3.x 該欄可能為
+    # None，退 dag_run.run_after），再 start_of("hour") 截整點，讓 bronze _metadata.logical_hour
+    # 本身即為整點、跨 3 個 task（此處 / delete_stale_sparkapp / load_silver_to_postgres）一致。
+    logical_hour = resolve_run_anchor(ctx).start_of("hour")
     client = YouTubeClient(api_key=os.environ["YOUTUBE_API_KEY"])
     try:
         resp = client.fetch_trending(region=region, max_results=PIPELINE["max_results"])
@@ -55,7 +55,7 @@ def delete_stale_sparkapp():
     from kubernetes import client, config
 
     ctx = get_current_context()
-    name = "yt-silver-" + ctx["data_interval_start"].start_of("hour").strftime("%Y%m%d%H")
+    name = "yt-silver-" + resolve_run_anchor(ctx).start_of("hour").strftime("%Y%m%d%H")
     config.load_incluster_config()
     api = client.CustomObjectsApi()
     try:
@@ -71,10 +71,10 @@ def delete_stale_sparkapp():
 @task
 def load_silver_to_postgres() -> int:
     ctx = get_current_context()
-    # 最終 review 修（Critical 1）：手動觸發 data_interval_start 精確到秒，[hour,hour] 掃描窗
-    # 若不截斷到整點，與 Spark 寫入的整點 captured_at 對不上、n==0 guard 必然炸——用同一支
-    # 乾淨小時鐘（start_of("hour")）餵 loader 掃描窗。
-    hour = ctx["data_interval_start"].start_of("hour")
+    # [hour,hour] 掃描窗須與 ingest/Spark 寫入的整點 captured_at 對齊，否則 n==0 guard 必炸——
+    # 走同一支 resolve_run_anchor(ctx).start_of("hour")（手動觸發 data_interval_start 可能為 None，
+    # 見 _yt_common.resolve_run_anchor），確保三 task 取到同一乾淨整點。
+    hour = resolve_run_anchor(ctx).start_of("hour")
     n = load_hours_to_postgres(hour, hour)
     if n == 0:
         raise RuntimeError(f"silver scan 為空（hour={hour.isoformat()}）——Spark 未產出？")

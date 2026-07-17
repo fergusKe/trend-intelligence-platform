@@ -12,9 +12,27 @@ import os
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
+import pendulum
 import yaml
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator
 from airflow.providers.cncf.kubernetes.secret import Secret
+
+
+def resolve_run_anchor(ctx):
+    """回傳本輪 run 穩定的 UTC 時間錨（pendulum DateTime）；callers 自行 .start_of("hour")。
+
+    排程 run：用 data_interval_start（timetable 定義的區間起點，語意最正確）。
+    手動 / UI 觸發：Airflow 3.x「manual DAG runs do not guarantee data_interval」
+    （見 docs/installation/upgrading_to_airflow3；bare `dags trigger` 實測 data_interval_start
+    與 logical_date 皆 None，直接 ctx["data_interval_start"] 會 KeyError→task 反覆 up_for_retry、
+    DAG run 永不 success）——退回 dag_run.run_after：run 建立時即固定、跨所有 task 一致，
+    故 ingest/spark/loader 各自呼叫仍取到同一小時（用 now() 會因 task 間跨整點而漂移）。
+    """
+    anchor = ctx.get("data_interval_start") or ctx.get("logical_date")
+    if anchor is None:
+        dag_run = ctx.get("dag_run")
+        anchor = getattr(dag_run, "run_after", None) or pendulum.now("UTC")
+    return pendulum.instance(anchor)
 
 CONFIG_DIR = Path(__file__).parent / "config"
 PIPELINE = yaml.safe_load((CONFIG_DIR / "pipeline.yaml").read_text())

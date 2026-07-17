@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from datetime import timedelta
 from pathlib import Path
 
@@ -9,6 +10,11 @@ import pendulum
 import yaml
 from airflow.sdk import DAG, get_current_context, task
 from airflow.sdk.exceptions import AirflowFailException
+
+# 同 yt_trending_hourly：把 dags/ 加進 sys.path 讓同層共用模組 _yt_common 可 import
+# （DagBag 用獨立雜湊 module name 解析，不自動把 dags/ 進 sys.path）。
+sys.path.insert(0, str(Path(__file__).parent))
+from _yt_common import resolve_run_anchor  # noqa: E402
 
 CONFIG_DIR = Path(__file__).parent / "config"
 PIPELINE = yaml.safe_load((CONFIG_DIR / "pipeline.yaml").read_text())
@@ -29,7 +35,9 @@ def ingest_categories(region: str) -> int:
     from yt_ingest.client import QuotaExceededError, YouTubeClient
 
     ctx = get_current_context()
-    logical_date = ctx["data_interval_start"]
+    # 排程用 data_interval_start；手動觸發 Airflow 3.x 該欄可能為 None（見 _yt_common.resolve_run_anchor），
+    # 退 dag_run.run_after。categories 走 with_hour=False，只取日期分區。
+    logical_date = resolve_run_anchor(ctx)
     client = YouTubeClient(api_key=os.environ["YOUTUBE_API_KEY"])
     try:
         resp = client.fetch_categories(region=region)
