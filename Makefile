@@ -27,9 +27,11 @@ argocd-ui:             ## port-forward + 印初始密碼
 	@kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d; echo
 	kubectl -n argocd port-forward svc/argocd-server 8081:443
 
-pipeline-secrets:      ## make pipeline-secrets YOUTUBE_API_KEY=<key>（冪等；命令式、不進 git）
-	@test -n "$(YOUTUBE_API_KEY)" || { echo "用法：make pipeline-secrets YOUTUBE_API_KEY=<key>"; exit 1; }
-	./scripts/pipeline-secrets.sh "$(YOUTUBE_API_KEY)"
+pipeline-secrets:      ## 佈 secrets（冪等；命令式、不進 git）。key 來源：.env 的 YOUTUBE_API_KEY，或 YOUTUBE_API_KEY=<key> 覆蓋
+	@KEY="$(YOUTUBE_API_KEY)"; \
+	if [ -z "$$KEY" ] && [ -f .env ]; then set -a; . ./.env; set +a; KEY="$$YOUTUBE_API_KEY"; fi; \
+	test -n "$$KEY" || { echo "需要 YOUTUBE_API_KEY：填進 .env（見 .env.example）或 make pipeline-secrets YOUTUBE_API_KEY=<key>"; exit 1; }; \
+	./scripts/pipeline-secrets.sh "$$KEY"
 
 pipeline-verify:       ## P1 端到端 10 檢查（前置：make verify 綠 + pipeline-secrets 已跑）
 	./scripts/verify-pipeline.sh
