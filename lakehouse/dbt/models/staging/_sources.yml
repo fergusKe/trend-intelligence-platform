@@ -1,0 +1,16 @@
+version: 2
+sources:
+  - name: silver
+    database: lakehouse
+    schema: silver
+    tables:
+      - name: video_snapshots
+        loaded_at_field: ingested_at
+        freshness:
+          warn_after: {count: 2, period: hour}
+          error_after: {count: 4, period: hour}
+      - name: youtube_categories
+        loaded_at_field: updated_at   # 該表無 ingested_at（design 收緊 pass 修正）
+        freshness:
+          warn_after: {count: 26, period: hour}
+          error_after: {count: 50, period: hour}

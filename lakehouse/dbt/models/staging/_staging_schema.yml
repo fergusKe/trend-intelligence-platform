@@ -1,0 +1,21 @@
+version: 2
+models:
+  - name: stg_video_snapshots
+    columns:
+      - name: video_id
+        data_tests: [not_null]
+      - name: region
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: [TW, JP, KR, HK, US, GB, SG, AU]
+      - name: captured_at
+        data_tests: [not_null]
+      - name: views
+        data_tests: [not_null]
+  - name: stg_categories
+    columns:
+      - name: category_id
+        data_tests: [not_null]
+      - name: region
+        data_tests: [not_null]

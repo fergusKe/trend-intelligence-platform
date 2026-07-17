@@ -32,6 +32,11 @@ mlruns/
 *.pt
 *.faiss
 
+# dbt
+target/
+dbt_packages/
+.user.yml
+
 # DVC
 /dvc.lock
 

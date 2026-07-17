@@ -1,0 +1,12 @@
+lakehouse:
+  target: k8s
+  outputs:
+    k8s:
+      type: postgres
+      host: "{{ env_var('LAKEHOUSE_PG_HOST', 'lakehouse-postgres.data.svc') }}"
+      port: 5432
+      user: dbt_runner
+      password: "{{ env_var('DBT_PG_PASSWORD') }}"
+      dbname: lakehouse
+      schema: gold
+      threads: 4

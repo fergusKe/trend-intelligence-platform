@@ -1,0 +1,32 @@
+version: 2
+models:
+  - name: gold_trending_daily
+    columns:
+      - name: region
+        data_tests: [not_null]
+      - name: trending_date
+        data_tests: [not_null]
+      - name: total_views
+        data_tests: [not_null]
+  - name: gold_video_velocity_hourly
+    columns:
+      - name: video_id
+        data_tests: [not_null]
+      - name: captured_at
+        data_tests: [not_null]
+      - name: delta_views
+        data_tests: [not_null]
+  - name: gold_video_lifecycle
+    columns:
+      - name: video_id
+        data_tests: [not_null]
+      - name: first_seen_at
+        data_tests: [not_null]
+  - name: gold_category_daily
+    columns:
+      - name: category_id
+        data_tests:
+          - relationships:
+              to: ref('stg_categories')
+              field: category_id
+              config: {severity: warn}   # categories 維度 @daily 可能晚於首日 hourly 資料
