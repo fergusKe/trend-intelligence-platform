@@ -8,6 +8,14 @@ PGEXEC="kubectl -n data exec lakehouse-postgres-0 -- psql -U postgres -d lakehou
 AF_DEPLOY="deploy/airflow-api-server"   # chart 產出名；Task 15 校準
 DAG_ID="yt_trending_hourly"
 
+# Airflow 3.2 CLI 每次呼叫都把 alembic plugin 初始化的 [info] log 印到 stdout，
+# 污染 `-o json` 輸出（JSON 前多 6 行時間戳 log）→ jq 直接 parse error。
+# 濾掉開頭 ISO 時間戳（^YYYY-MM-DDThh…）的 log 行，只留乾淨 JSON 再交給 jq。
+list_runs_json() {  # $1=dag_id → 印去 log 後的乾淨 JSON 陣列
+  kubectl -n airflow exec "${AF_DEPLOY}" -- airflow dags list-runs "$1" -o json 2>/dev/null \
+    | grep -vE '^[0-9]{4}-[0-9]{2}-[0-9]{2}T'
+}
+
 echo "[1/10] ArgoCD apps 收斂（10 個，timeout 900s）"
 deadline=$(( $(date +%s) + 900 ))
 while :; do
@@ -31,7 +39,7 @@ kubectl -n airflow exec "${AF_DEPLOY}" -- airflow dags unpause yt_categories_dai
 kubectl -n airflow exec "${AF_DEPLOY}" -- airflow dags trigger yt_categories_daily
 deadline=$(( $(date +%s) + 600 ))
 while :; do
-  state=$(kubectl -n airflow exec "${AF_DEPLOY}" -- airflow dags list-runs yt_categories_daily -o json 2>/dev/null | jq -r '.[0].state')
+  state=$(list_runs_json yt_categories_daily | jq -r '.[0].state')
   [ "${state}" = "success" ] && break
   [ "${state}" = "failed" ] && fail "yt_categories_daily 前置跑 failed（silver.youtube_categories 無法建立，stg_categories 必炸）"
   [ "$(date +%s)" -gt "$deadline" ] && fail "yt_categories_daily 前置跑未在 600s 內完成（state=${state}）"
@@ -47,7 +55,7 @@ TRIGGER_HOUR=$(date -u +"%Y-%m-%d %H:00:00+00")
 kubectl -n airflow exec "${AF_DEPLOY}" -- airflow dags trigger "${DAG_ID}"
 deadline=$(( $(date +%s) + 1800 ))
 while :; do
-  state=$(kubectl -n airflow exec "${AF_DEPLOY}" -- airflow dags list-runs "${DAG_ID}" -o json 2>/dev/null | jq -r '.[0].state')
+  state=$(list_runs_json "${DAG_ID}" | jq -r '.[0].state')
   [ "${state}" = "success" ] && break
   [ "${state}" = "failed" ] && fail "dagrun failed（含 dbt_test DQ gate）"
   [ "$(date +%s)" -gt "$deadline" ] && fail "dagrun 未在 1800s 內完成（state=${state}）"
@@ -82,11 +90,11 @@ ok "gold marts 就緒"
 echo "[7/10] 冪等：clear+rerun 同 logical date 後列數不膨脹"
 before_silver=${silver_count}
 before_gold=$(${PGEXEC} "SELECT count(*) FROM gold.gold_trending_daily")
-run_lo=$(kubectl -n airflow exec "${AF_DEPLOY}" -- airflow dags list-runs "${DAG_ID}" -o json | jq -r '.[0].logical_date')
+run_lo=$(list_runs_json "${DAG_ID}" | jq -r '.[0].logical_date')
 kubectl -n airflow exec "${AF_DEPLOY}" -- airflow tasks clear "${DAG_ID}" -s "${run_lo}" -e "${run_lo}" -y
 deadline=$(( $(date +%s) + 1800 ))
 while :; do
-  state=$(kubectl -n airflow exec "${AF_DEPLOY}" -- airflow dags list-runs "${DAG_ID}" -o json | jq -r '.[0].state')
+  state=$(list_runs_json "${DAG_ID}" | jq -r '.[0].state')
   [ "${state}" = "success" ] && break
   [ "${state}" = "failed" ] && fail "重跑 failed"
   [ "$(date +%s)" -gt "$deadline" ] && fail "重跑未在 1800s 內完成"
