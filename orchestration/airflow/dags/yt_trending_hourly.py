@@ -102,12 +102,14 @@ with DAG(
         task_id="spark_bronze_to_silver",
         namespace="data",
         application_file="templates/spark_silver.yaml",
-        # deferrable：提交 SparkApplication 後把「等 CR 到 COMPLETED」交給 triggerer 非同步輪詢，
-        # 不再由 worker pod 內的同步 watch 盯著。16GB M4 上 worker pod 慢啟動（git-sync init+image ~180s）
-        # ＋ k8s watch stream 在資源吃緊時會中斷 → 同步 watch 常把「SparkApp 其實已 COMPLETED」的 task
-        # 誤標 failed／up_for_retry（實測 driver exit 0、CR COMPLETED，task 卻 failed）。triggerer 是穩定常駐
-        # 服務、不隨每次重試重建，deferrable 對此環境的可靠性明顯較佳（provider 10.17.1 已修 deferrable 舊 bug）。
-        deferrable=True,
+        # execution_timeout=20min（覆蓋 DEFAULT_ARGS 的 10min）：單節點 8Gi kind 上 driver+executor
+        # 各 1536m（合計 3G）＋ 執行本 operator 的 KubernetesExecutor worker pod 三者同節點，executor
+        # 常先撞 FailedScheduling: Insufficient memory 等記憶體騰出才排得進去（實測事件）；SparkApplication
+        # 本體其實會跑完（Driver/Executor 皆 Completed），只是排程等待吃掉時間。10min 太緊會在 executor
+        # 還沒排上時逾時→up_for_retry 輪迴→耗盡 retries→failed。20min 給排程延遲留餘裕，spark 本體 ~2-3min。
+        # 註：曾試 deferrable=True 想把等待交 triggerer，但此 provider(10.17.1)+資源環境下 operator 連 CR
+        # 都沒穩定提交（實測全程 SparkApp=none、task 反覆 up_for_retry），比同步模式更差 → 回同步。
+        execution_timeout=timedelta(minutes=20),
         params={
             "spark_image": f"{IMAGES['spark_job']['repository']}:{IMAGES['spark_job']['tag']}",
             "pg_password": _pg_password(),
