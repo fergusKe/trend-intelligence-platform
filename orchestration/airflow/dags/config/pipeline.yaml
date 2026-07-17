@@ -1,0 +1,4 @@
+regions: [TW, JP, KR, HK, US, GB, SG, AU]
+max_results: 50
+bronze_bucket: bronze
+s3_endpoint: http://lakehouse-minio.data.svc:9000

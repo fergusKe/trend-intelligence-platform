@@ -1,0 +1,62 @@
+# SparkKubernetesOperator Jinja 模板（.yaml 在 template_ext 內，runtime 渲染）。
+# 兩模式：hourly（無 start_hour param → 用 data_interval_start）；reprocess（params.start_hour/end_hour）。
+apiVersion: sparkoperator.k8s.io/v1beta2
+kind: SparkApplication
+metadata:
+  {%- if params.start_hour is defined and params.start_hour %}
+  name: yt-silver-rp-{{ ts_nodash | lower }}
+  {%- else %}
+  name: yt-silver-{{ data_interval_start.strftime('%Y%m%d%H') }}
+  {%- endif %}
+  namespace: data
+spec:
+  type: Python
+  pythonVersion: "3"
+  mode: cluster
+  image: "{{ params.spark_image }}"
+  imagePullPolicy: IfNotPresent
+  mainApplicationFile: local:///opt/spark/jobs/silver_job.py
+  arguments:
+  {%- if params.start_hour is defined and params.start_hour %}
+    - --start-hour
+    - "{{ params.start_hour }}"
+    - --end-hour
+    - "{{ params.end_hour }}"
+  {%- else %}
+    - --date
+    - "{{ data_interval_start.strftime('%Y-%m-%d') }}"
+    - --hour
+    - "{{ data_interval_start.strftime('%H') }}"
+  {%- endif %}
+  sparkVersion: "4.0.2"
+  restartPolicy:
+    type: Never          # 重試由 Airflow task 層負責，不雙層重試
+  timeToLiveSeconds: 3600
+  sparkConf:
+    # Iceberg JDBC catalog（§4 合約；catalog 名 lakehouse）
+    spark.sql.catalog.lakehouse: org.apache.iceberg.spark.SparkCatalog
+    spark.sql.catalog.lakehouse.type: jdbc
+    spark.sql.catalog.lakehouse.uri: jdbc:postgresql://lakehouse-postgres.data.svc:5432/lakehouse
+    spark.sql.catalog.lakehouse.jdbc.user: pipeline_writer
+    spark.sql.catalog.lakehouse.jdbc.password: "{{ params.pg_password }}"
+    spark.sql.catalog.lakehouse.warehouse: s3a://silver/warehouse
+    spark.sql.defaultCatalog: lakehouse
+    # S3A → MinIO（憑證走 env，見 envFrom）
+    spark.hadoop.fs.s3a.endpoint: http://lakehouse-minio.data.svc:9000
+    spark.hadoop.fs.s3a.path.style.access: "true"
+    spark.hadoop.fs.s3a.connection.ssl.enabled: "false"
+    spark.hadoop.fs.s3a.aws.credentials.provider: com.amazonaws.auth.EnvironmentVariableCredentialsProvider
+    spark.sql.session.timeZone: UTC
+  driver:
+    cores: 1
+    memory: 1536m
+    serviceAccount: spark-operator-spark
+    envFrom:
+      - secretRef: {name: minio-root}
+  executor:
+    instances: 1
+    cores: 1
+    memory: 1536m
+    serviceAccount: spark-operator-spark
+    envFrom:
+      - secretRef: {name: minio-root}
