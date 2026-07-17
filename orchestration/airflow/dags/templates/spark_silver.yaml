@@ -1,12 +1,19 @@
 # SparkKubernetesOperator Jinja 模板（.yaml 在 template_ext 內，runtime 渲染）。
-# 兩模式：hourly（無 start_hour param → 用 data_interval_start）；reprocess（params.start_hour/end_hour）。
+# 兩模式：hourly（無 start_hour param → 用時間錨）；reprocess（params.start_hour/end_hour）。
+#
+# ⚠️ 時間錨必須鏡射 _yt_common.resolve_run_anchor：(data_interval_start or logical_date or dag_run.run_after)。
+# Airflow 3.x bare `dags trigger`（手動 run）data_interval_start 與 logical_date 皆 None，直接
+# data_interval_start.strftime() 會 render 爆（None.strftime）→ spark task 每 try 秒掛、4 try 耗盡→failed
+# （實測：所有 manual run ld=None、spark failed try=4；scheduled run ld 正常、spark success）。ingest/
+# delete_stale/load 都走 resolve_run_anchor 退 run_after，spark 模板漏套就會時間錨不一致——名字/‑‑hour
+# 對不上 ingest 寫的 bronze 小時、load 掃空。故此處三個 strftime 全走同一 fallback，跨 task 對齊整點。
 apiVersion: sparkoperator.k8s.io/v1beta2
 kind: SparkApplication
 metadata:
   {%- if params.start_hour is defined and params.start_hour %}
   name: yt-silver-rp-{{ ts_nodash | lower }}
   {%- else %}
-  name: yt-silver-{{ data_interval_start.strftime('%Y%m%d%H') }}
+  name: yt-silver-{{ (data_interval_start or logical_date or dag_run.run_after).strftime('%Y%m%d%H') }}
   {%- endif %}
   namespace: data
 spec:
@@ -24,9 +31,9 @@ spec:
     - "{{ params.end_hour }}"
   {%- else %}
     - --date
-    - "{{ data_interval_start.strftime('%Y-%m-%d') }}"
+    - "{{ (data_interval_start or logical_date or dag_run.run_after).strftime('%Y-%m-%d') }}"
     - --hour
-    - "{{ data_interval_start.strftime('%H') }}"
+    - "{{ (data_interval_start or logical_date or dag_run.run_after).strftime('%H') }}"
   {%- endif %}
   sparkVersion: "4.0.2"
   restartPolicy:
