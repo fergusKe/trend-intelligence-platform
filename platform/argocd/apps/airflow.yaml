@@ -79,9 +79,15 @@ spec:
         createUserJob:
           useHelmHooks: false
           applyCustomEnv: false
+          jobAnnotations: # ArgoCD 官方建議姿態：Job.spec.template 不可變，plain resource 遇 spec 變（image bump）ArgoCD patch 撞 immutable→SyncFailed 死鎖。設 Sync hook 令 ArgoCD 每次 sync 刪舊建新，繞開 immutable
+            "argocd.argoproj.io/hook": Sync
+            "argocd.argoproj.io/hook-delete-policy": BeforeHookCreation
         migrateDatabaseJob:
           useHelmHooks: false
           applyCustomEnv: false
+          jobAnnotations: # 同上；migrate 走 Sync hook＝每次 sync 冪等重跑 airflow db migrate（image bump 帶新 migration 時正確套用）
+            "argocd.argoproj.io/hook": Sync
+            "argocd.argoproj.io/hook-delete-policy": BeforeHookCreation
   destination:
     server: https://kubernetes.default.svc
     namespace: airflow
