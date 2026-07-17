@@ -3,4 +3,4 @@ spark_job:
   tag: sha-4a5f14f # spark-ci bump
 dbt:
   repository: ghcr.io/ferguske/trend-intelligence-platform/dbt
-  tag: sha-4f87243 # dbt-ci bump（手動補：CI bump race 撞 images.yaml 衝突）
+  tag: sha-b7120bd # dbt-ci bump（手動補：CI bump race 撞 images.yaml 衝突）
