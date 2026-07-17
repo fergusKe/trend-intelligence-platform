@@ -49,16 +49,23 @@ spec:
     # 讀同一組 AWS_ACCESS_KEY_ID/SECRET env（minio-root secret via envFrom）。
     spark.hadoop.fs.s3a.aws.credentials.provider: software.amazon.awssdk.auth.credentials.EnvironmentVariableCredentialsProvider
     spark.sql.session.timeZone: UTC
+  # 右尺寸：silver_job 單小時只處理 ~400 列（8 region × 50 影片）的小 JSON，
+  # 原 driver+executor 各 1536m（尖峰 ~3.8GiB pod 記憶體）對這資料量嚴重超配。
+  # 在 16GB M4（OrbStack VM ~8GiB、kind 三節點共享）上，spark 尖峰會把 kube-apiserver/etcd
+  # 逼進 swap thrash → spark-operator leader-election lease 逾時掉租、operator 重啟 →
+  # in-flight SparkApplication 追蹤斷裂 → Airflow 端 up_for_retry 重試風暴（跑不出一整輪綠）。
+  # 縮到 driver 1024m / executor 768m（仍保留 1 executor 展示 cluster 分散式形狀，
+  # 但留足 JVM+Iceberg+S3A 載入 headroom 不觸真 OOM），尖峰降 ~1.3GiB 讓控制平面喘得過氣。
   driver:
     cores: 1
-    memory: 1536m
+    memory: 1024m
     serviceAccount: spark-operator-spark
     envFrom:
       - secretRef: {name: minio-root}
   executor:
     instances: 1
     cores: 1
-    memory: 1536m
+    memory: 768m
     serviceAccount: spark-operator-spark
     envFrom:
       - secretRef: {name: minio-root}
