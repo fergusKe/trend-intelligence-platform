@@ -45,7 +45,9 @@ spec:
     spark.hadoop.fs.s3a.endpoint: http://lakehouse-minio.data.svc:9000
     spark.hadoop.fs.s3a.path.style.access: "true"
     spark.hadoop.fs.s3a.connection.ssl.enabled: "false"
-    spark.hadoop.fs.s3a.aws.credentials.provider: com.amazonaws.auth.EnvironmentVariableCredentialsProvider
+    # AWS SDK v2 provider（配 hadoop-aws 3.4.1 的 v2 bundle）——v1 的 com.amazonaws.auth.* 換 bundle 後不存在；
+    # 讀同一組 AWS_ACCESS_KEY_ID/SECRET env（minio-root secret via envFrom）。
+    spark.hadoop.fs.s3a.aws.credentials.provider: software.amazon.awssdk.auth.credentials.EnvironmentVariableCredentialsProvider
     spark.sql.session.timeZone: UTC
   driver:
     cores: 1
