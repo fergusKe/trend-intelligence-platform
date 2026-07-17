@@ -102,6 +102,12 @@ with DAG(
         task_id="spark_bronze_to_silver",
         namespace="data",
         application_file="templates/spark_silver.yaml",
+        # deferrable：提交 SparkApplication 後把「等 CR 到 COMPLETED」交給 triggerer 非同步輪詢，
+        # 不再由 worker pod 內的同步 watch 盯著。16GB M4 上 worker pod 慢啟動（git-sync init+image ~180s）
+        # ＋ k8s watch stream 在資源吃緊時會中斷 → 同步 watch 常把「SparkApp 其實已 COMPLETED」的 task
+        # 誤標 failed／up_for_retry（實測 driver exit 0、CR COMPLETED，task 卻 failed）。triggerer 是穩定常駐
+        # 服務、不隨每次重試重建，deferrable 對此環境的可靠性明顯較佳（provider 10.17.1 已修 deferrable 舊 bug）。
+        deferrable=True,
         params={
             "spark_image": f"{IMAGES['spark_job']['repository']}:{IMAGES['spark_job']['tag']}",
             "pg_password": _pg_password(),
