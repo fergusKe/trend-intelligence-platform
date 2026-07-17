@@ -15,13 +15,13 @@ spec:
       valuesObject:
         executor: KubernetesExecutor
         postgresql:
-          enabled: false            # metadata 走共用 Postgres 的 airflow db（一套 Postgres 紀律）
-        metadataSecretName: lakehouse-postgres   # chart 約定 key 名 connection（§8）
+          enabled: false # metadata 走共用 Postgres 的 airflow db（一套 Postgres 紀律）
+        metadataSecretName: lakehouse-postgres # chart 約定 key 名 connection（§8）
         webserverSecretKeySecretName: airflow-webserver-secret
         images:
           airflow:
             repository: ghcr.io/ferguske/trend-intelligence-platform/airflow
-            tag: sha-0000000        # 佔位；airflow-ci bump
+            tag: sha-edc68f0 # 佔位；airflow-ci bump
         dags:
           gitSync:
             enabled: true
@@ -72,7 +72,7 @@ spec:
             requests: {cpu: 100m, memory: 256Mi}
             limits: {cpu: 500m, memory: 512Mi}
         workers:
-          resources:              # KubernetesExecutor ephemeral task pod（含 ingest ×8）
+          resources: # KubernetesExecutor ephemeral task pod（含 ingest ×8）
             requests: {cpu: 100m, memory: 256Mi}
             limits: {cpu: "1", memory: 512Mi}
         createUserJob:
