@@ -26,7 +26,12 @@ DEFAULT_ARGS = {
 }
 
 
-@task
+# max_active_tis_per_dag=3：ingest 動態映射 8 區，KubernetesExecutor 每個 map 起一顆 worker pod；
+# 8 顆同時噴會把 16GiB M4 host（單顆 OrbStack VM 承載 kind 三節點 + Postgres/MinIO/kube-prometheus-stack）
+# 壓到 swap 狂抖、airflow 全組件探針 20s 逾時、scheduler CrashLoop（見 errata §F-2）。限 3 顆同時仍抓滿
+# 8 區（regions=8 資料合約不變，只是分批），削峰值記憶體。context7 查證：@task(max_active_tis_per_dag=N)
+# 限制 mapped task 跨 DagRun 的同時執行數（Airflow 3.x dynamic-task-mapping）。
+@task(max_active_tis_per_dag=3)
 def ingest_trending(region: str) -> str:
     from yt_ingest.bronze import write_bronze
     from yt_ingest.client import QuotaExceededError, YouTubeClient

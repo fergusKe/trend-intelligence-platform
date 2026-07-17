@@ -28,7 +28,9 @@ DEFAULT_ARGS = {
 }
 
 
-@task
+# max_active_tis_per_dag=3：同 yt_trending_hourly，限 ingest 動態映射的並發 worker pod 數，
+# 避免 8 顆 KubernetesExecutor pod 同噴壓垮 16GiB M4（見 errata §F-2）。regions=8 合約不變。
+@task(max_active_tis_per_dag=3)
 def ingest_categories(region: str) -> int:
     from yt_ingest.bronze import write_bronze
     from yt_ingest.categories import connect, upsert_categories
