@@ -16,6 +16,13 @@ rules:
   - apiGroups: [""]
     resources: ["pods/log"]
     verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    # KubernetesPodOperator（dbt_run/dbt_test）await_pod_start → watch_pod_events 會 list data ns 的
+    # events 回報 pod 排程進度；缺此權限則 dbt pod 還在 ContainerCreating 時 KPO 就撞 403 Forbidden
+    # （"events is forbidden: ... cannot list resource events in namespace data"）→ task failed。
+    # dbt pod 本體其實會成功（實測 dbt run PASS=7），純粹卡在 operator 這層的 events 讀取權限。
+    verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
