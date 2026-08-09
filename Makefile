@@ -3,8 +3,10 @@
         p1-secrets p1-up p1-run p1-verify p1-down \
         cluster-up cluster-down cluster-stop cluster-start verify argocd-ui \
         pipeline-secrets pipeline-verify pipeline-trigger \
-        demo-p1-up demo-p1-down dev-lean-down dev-lean-up
+        demo-p1-up demo-p1-down dev-lean-down dev-lean-up \
+        gates gates-write gates-positive-control
 ARGOCD_VERSION := v3.4.4
+PYTHON ?= python3
 .DEFAULT_GOAL := help
 
 # help 依 `##@ 區段` 分組列出帶 `## ` 說明的 target——一眼看出「每階段跑什麼、開哪些服務」。
@@ -36,6 +38,21 @@ p1-up:                         ## 起 P1 服務：ArgoCD 拉回 → 開 airflow/
 p1-run: p1-run-sh              ## 一鍵驗收：觸發主 DAG → 盯每個 task 到終態 → 印 Gold 五表計數
 p1-verify: pipeline-verify     ## P1 端到端 10 檢查（前置：p0-verify 綠 + p1-secrets 已跑）
 p1-down: demo-p1-down          ## 暫停 P1 重元件（GitOps 安全：關 auto-sync 再縮 0；騰記憶體給 host 重活）
+
+# ─────────────────────────────────────────────────────────────────────────────
+##@ 守門閘（純標準庫，不需要叢集也不需要裝任何東西；紀律見 docs/RULES.md）
+# ─────────────────────────────────────────────────────────────────────────────
+
+gates:                 ## 跑全部閘：文件漂移 + spec 台帳 + 陽性對照（推 main 前跑這個）
+	$(PYTHON) scripts/gates/check_docs_drift.py
+	$(PYTHON) scripts/gates/check_spec_ledger.py
+	$(PYTHON) scripts/gates/positive_control.py
+
+gates-write:           ## 把文件裡的 <!-- fact:NAME=N --> 回填成現查值
+	$(PYTHON) scripts/gates/check_docs_drift.py --write
+
+gates-positive-control: ## 只跑陽性對照（證明閘在該紅時真的會紅）
+	$(PYTHON) scripts/gates/positive_control.py
 
 # ─────────────────────────────────────────────────────────────────────────────
 ##@ 積木／進階（被上面階段 target 複用，也可單獨用）

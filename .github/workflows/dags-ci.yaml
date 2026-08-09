@@ -1,0 +1,45 @@
+name: dags-ci
+# 讀者＝每一次改 DAG 的作者（RULES §6）。
+#
+# 為什麼需要這支：airflow-ci.yaml 的 path filter **刻意排除** orchestration/airflow/dags/**，
+# 而且那個排除是對的——DAG 走 git-sync 即時生效，改 DAG 不需要 rebuild airflow image，
+# 讓 DAG 變更觸發一次多平台 buildx 是純浪費。
+#
+# 但排除的副作用是：**被改最多次的檔案（DAG）沒有任何測試讀者**。
+# 最近 11 個 commit 零 CI 覆蓋，大半就是 DAG 與 DAG 模板的修正（時間錨、trigger rule、
+# 資源尺寸、Jinja default 鏈…）——每一個都是 orchestration/airflow/tests/ 攔得到的類型。
+#
+# 所以這支只做一件事：**跑測試，不建 image**。與 airflow-ci 的 test job 同一組依賴，
+# 但沒有 build-push-bump，所以既不浪費 buildx 也不會製造 bump commit 迴圈。
+on:
+  push:
+    branches: [main]
+    paths:
+      - "orchestration/airflow/dags/**"
+      - "orchestration/airflow/tests/**"
+  pull_request:
+    paths:
+      - "orchestration/airflow/dags/**"
+      - "orchestration/airflow/tests/**"
+  workflow_dispatch: {}
+concurrency:
+  group: dags-ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test-dags:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v8.3.2
+        with: {python-version: "3.12"}
+      - name: DagBag import + 依賴鏈 + 守門 + config 一致性（不建 image）
+        run: |
+          uv venv /tmp/af-venv
+          source /tmp/af-venv/bin/activate
+          uv pip install "apache-airflow==3.2.2" "apache-airflow-providers-cncf-kubernetes" \
+            --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-3.2.2/constraints-3.12.txt"
+          # 與 orchestration/airflow/Dockerfile 同組 runtime 依賴——test_imports_available
+          # 驗證 image 內可 import 的套件（pyiceberg 非 yt_ingest 依賴，須顯式裝）
+          uv pip install ./ingestion/youtube "pyiceberg[s3fs,sql-postgres]==0.11.1" \
+            "psycopg2-binary==2.9.10" "httpx==0.28.1" "boto3==1.40.0" "pytest==9.1.1" "pyyaml==6.0.3"
+          pytest orchestration/airflow/tests/ -v
