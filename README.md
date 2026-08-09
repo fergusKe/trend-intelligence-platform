@@ -4,7 +4,9 @@
 
 以 YouTube 熱門趨勢為主幹（PTT 論壇為第二來源），把原始資料從 **ingest → Lakehouse → 建模 → 上線監控**打通一條龍，全程跑在 **Kubernetes**、以 **GitOps** 部署、具備完整可觀測性。一個平台同時展示資料工程、模型維運、平台工程三種能力。
 
-> 狀態：📐 **全專案 spec-only、實作待啟動**（`docs/plans/` 仍空、程式目錄僅 scaffold）。截至 **2026-07-10**，所有設計 spec 皆已完成並通過內建「精確度契約 8 條」：核心平台 **P0–P5**、電商擴充 **P6 推薦／P7 DMP／即時 Flink**（＋GA4 第二真來源）、**統一資料作品集四支柱**（Signal 設計系統／GA／搜尋／問 AI）、以及**進階增補**（P6 進階召回、P7 模型化標籤、觀測性強化、AI 維運事件敘事者）。**下一動作＝接手 session 走 `superpowers:writing-plans`，從 P0 起逐份寫 implementation plan**。架構正本見 [`docs/architecture/NORTH_STAR.md`](docs/architecture/NORTH_STAR.md)；接手指南、完整 design 清單與寫 plan 硬序見 [`CLAUDE.md`](CLAUDE.md)。
+> **狀態的單一真源是 [`docs/SPEC_STATUS.md`](docs/SPEC_STATUS.md)** — 每份 spec 一行，標「已實作 / 已規劃未實作 / 已作廢」，由 `scripts/gates/check_spec_ledger.py` 在每次 push 對帳。本段刻意**不複述**它：這裡曾經寫死過一份狀態，然後落後現實兩個 phase（機制與理由見 [`docs/RULES.md`](docs/RULES.md) §7）。
+>
+> 一句話概括：**P0 平台底座與 P1 資料管線已實作，並在本地 kind 叢集端到端跑通**（YouTube ingest → Iceberg Bronze → Spark Silver → dbt Gold 5 表 → 3 支 Airflow DAG）；**其餘階段目前只有 design spec**（共 <!-- fact:spec_count=44 --> 份 spec 檔 ≈ 22 個主題，皆通過內建「精確度契約 8 條」）：P2–P5、電商擴充 **P6 推薦／P7 DMP／即時 Flink**（＋GA4 第二真來源）、**統一資料作品集四支柱**（Signal 設計系統／GA／搜尋／問 AI）、**進階增補**（P6 進階召回、P7 模型化標籤、觀測性強化、AI 維運事件敘事者）。架構正本見 [`docs/architecture/NORTH_STAR.md`](docs/architecture/NORTH_STAR.md)；接手指南見 [`CLAUDE.md`](CLAUDE.md)；守門機制紀律見 [`docs/RULES.md`](docs/RULES.md)。
 
 ---
 
@@ -103,9 +105,34 @@ docs/
 ```
 > 目錄為指示性佈局；每階段的 spec 會敲定該層的最終結構（`frontend/` 待 P4）。
 
-## 本地啟動（P0 spec 已定案，實作待啟動）
+## 本地啟動
 
-目標：`kind create cluster` → ArgoCD app-of-apps 指向本 repo → 各服務自動 sync。具體步驟見 P0 design（`docs/specs/2026-07-08-P0-platform-foundation-design.md`）；實作 plan 落地後補上一鍵指令。
+指令門面在 `Makefile`，依階段分組（`make help` 會列出全部）：
+
+```bash
+make p0-up        # kind 叢集 → ArgoCD → root app（其餘靠 GitOps 收斂 3-5 分鐘）
+make p0-verify    # 平台 smoke
+make p1-secrets   # 【前置】佈 YOUTUBE_API_KEY（讀 .env，見 .env.example；不進 git）
+make p1-up        # 起 P1 服務（Airflow / Spark / MinIO / Postgres / dbt）
+make p1-run       # 一鍵驗收：觸發主 DAG → 盯到終態 → 印 Gold 五表計數
+```
+
+設計正本見 P0 design（`docs/specs/2026-07-08-P0-platform-foundation-design.md`）與 P1 design；
+實跑教訓與環境事實（M4 runtime、記憶體右尺寸、S3A v2…）見 `docs/specs/2026-07-17-design-errata.md` §F。
+
+## 守門機制
+
+`make gates`（推 main 前跑一次；純標準庫，不需要叢集也不需要裝任何東西）：
+
+| 指令 | 檢查什麼 |
+|---|---|
+| `python scripts/gates/check_docs_drift.py` | 文件宣稱 vs 磁碟事實；寫死的數字 vs 現查值 |
+| `python scripts/gates/check_spec_ledger.py` | 每份 spec 都在 `docs/SPEC_STATUS.md` 有一行且證據對得到檔案 |
+| `python scripts/gates/positive_control.py` | **陽性對照**：證明上面兩支閘在該紅時真的會紅（13 個注入 case） |
+| `make gates-write` | 把文件裡的 `<!-- fact:NAME=N -->` 回填成現查值 |
+
+三者都跑在 `.github/workflows/guardrails.yaml`（**無 path filter**，每次 push / PR 必跑）。
+寫新閘之前先讀 [`docs/RULES.md`](docs/RULES.md) 的七條機制紀律。
 
 ## 靈感來源
 

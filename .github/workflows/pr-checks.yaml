@@ -1,4 +1,13 @@
 name: pr-checks
+# 讀者（RULES §6）：本檔原本只吃 pull_request，而這個 repo 從第一個 commit 起
+# **開過的 PR 數是 0**（全部直推 main）⇒ `gh run list --workflow pr-checks.yaml` 回傳 0 筆，
+# 這五個 job 從未執行過一次。裡面的 portability-guard（禁 controller 專屬 annotation /
+# storageClassName，本專案的可攜鐵律）因此從來沒有檢查過任何一行 manifest。
+#
+# 2026-08-10 補 push 觸發：讓它現在就有讀者＝每一次直推 main 的作者。
+# 名字保留 pr-checks（errata/文件有引用）；它現在是「PR 與直推共用的廣覆蓋閘」。
+# 與 hello-ci/spark-ci/dbt-ci 的 test job 有重疊，但那些 workflow 的 path filter 各自很窄，
+# 重疊換來的是「任何一處改動都至少有一支閘看得到」。Actions 在 public repo 免費。
 on:
   pull_request:
     paths:
@@ -7,6 +16,18 @@ on:
       - "ingestion/**"
       - "orchestration/airflow/**"
       - "lakehouse/**"
+  push:
+    branches: [main]
+    paths:
+      - "platform/hello/**"
+      - "platform/argocd/**"
+      - "ingestion/**"
+      - "orchestration/airflow/**"
+      - "lakehouse/**"
+  workflow_dispatch: {}
+concurrency:
+  group: pr-checks-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   test:
     runs-on: ubuntu-latest

@@ -1,3 +1,12 @@
+<!-- plan-status: implemented -->
+<!-- checkbox-policy: not-tracked -->
+<!-- 進度追蹤器宣告（scripts/gates/check_docs_drift.py 會驗）：
+     這份 plan 的 56 個 checkbox 在整個 P0 執行期間一個都沒有被勾過——實際進度走的是
+     .superpowers/sdd/progress.md（gitignored，clone 之後讀不到）與 git log。
+     與其事後補勾一堆自己沒有親眼驗過的框，不如誠實宣告 checkbox 在本 plan 不作為進度來源：
+     policy=not-tracked。狀態真源是 docs/SPEC_STATUS.md。
+     未來的 plan 若要靠 checkbox 追進度，就宣告 policy=tracked——閘會確保它不會像這份一樣 0/56 死在那裡。 -->
+
 # P0 平台底座 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

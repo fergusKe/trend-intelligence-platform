@@ -11,8 +11,11 @@
 ## 開場 60 秒（接手先做這個）
 
 1. 讀 [`docs/architecture/NORTH_STAR.md`](docs/architecture/NORTH_STAR.md)（架構正本 + 已鎖定決策 + 素材地圖）。
-2. 看 `docs/specs/` 有哪些階段 spec 已出、`docs/plans/` 有哪些 plan 已寫、`git log` 看做到哪。
-3. 確認你要做的階段（P0→P5 依序，P0 平台底座必須先做）。
+2. 讀 [`docs/SPEC_STATUS.md`](docs/SPEC_STATUS.md)（**做到哪裡的單一真源**：每份 spec 一行 + 現查數字）。
+   別靠散文判斷進度——這個 repo 的散文狀態曾經落後現實兩個 phase。
+3. 讀 [`docs/RULES.md`](docs/RULES.md)（七條機制紀律；**寫任何守門機制/CI/測試之前必讀**）。
+4. `python scripts/gates/check_docs_drift.py && python scripts/gates/check_spec_ledger.py` — 兩支閘現在綠不綠。
+5. 確認你要做的階段（P0→P5 依序，P0 平台底座必須先做）。
 
 ## 工作流（誰做什麼）— 走 superpowers skills
 
@@ -42,13 +45,22 @@
 7. **硬約束貫徹**——一個工作一個工具、M4 原生算力界線、拓撲（平台不部署／前端 Vercel／匯出檔為合約）、secret 走 k8s Secret 不硬編碼、非互動不向使用者提問。
 8. **每步可測**——端到端驗收清單可實跑（有測試/smoke/DQ），不是敘述性「應該會動」。
 
-## 目前狀態（2026-07-17 更新——此段是本專案的活狀態正本，接手先讀這段 ＋ NORTH_STAR）
+## 目前狀態
 
-🚀 **P0 已實作完成並部署**：plan `docs/plans/2026-07-16-P0-platform-foundation-implementation.md` 全 13 task 執行完、最終全分支 review READY、已合回 main；kind 叢集跑在 **M4 runtime**（開發在 M1、SSH 過去，見 errata §F）；hello-ci 全迴路通（GHCR image + bump commit）。下一動作＝寫 P1 plan。
+🔴 **狀態的真源不在這一段，在 [`docs/SPEC_STATUS.md`](docs/SPEC_STATUS.md)。**
 
-⚠️ **寫任何 plan 前必讀 [`docs/specs/2026-07-17-design-errata.md`](docs/specs/2026-07-17-design-errata.md)**——design 三路審查的勘誤補丁層（Fergus 拍板取捨、資源治理契約、pin 再驗證前置 task、P0 實跑教訓/M4 環境事實）；與 design 本文衝突時以 errata 為準。
+這一段以前自稱「本專案的活狀態正本」，然後停在「下一動作＝寫 P1 plan」——而 P1 plan 早就寫完並實作完成。
+**自稱正本比不宣稱更糟**：它要求讀者信任它、停止查證。所以現在的規矩是：
 
-📐 其餘階段仍 spec-only。全部 design 皆已達「Fable 5 精確度契約 8 條」；每份 design 尾段有 plan-前實查點清單（皆帶預設傾向）。
+- **做到哪裡** → 讀 `docs/SPEC_STATUS.md`（機器對帳，每次 push 由 `scripts/gates/check_spec_ledger.py` 驗）
+- **最近在幹嘛** → 讀 `git log`（唯一不會過期的載體）
+- **這段只放不會過期的東西**（下面兩條）
+
+⚠️ **寫任何 plan 前必讀 [`docs/specs/2026-07-17-design-errata.md`](docs/specs/2026-07-17-design-errata.md)**——design 三路審查的勘誤補丁層（Fergus 拍板取捨、資源治理契約、pin 再驗證前置 task、P0/P1 實跑教訓 §F/§F-2、M4 環境事實）；與 design 本文衝突時以 errata 為準。
+
+⚠️ **寫任何守門機制（CI job / guard script / 測試 / lint 規則）前必讀 [`docs/RULES.md`](docs/RULES.md)**——七條機制紀律（陽性對照、分母非空、fail-closed、留台帳、指名讀者、數字現查）。這個 repo 已經有過一份寫得很好但**從未執行過一次**的 CI（`pr-checks.yaml`，0 筆 run），不要再產一份。
+
+📐 全部 design 皆已達「Fable 5 精確度契約 8 條」；每份 design 尾段有 plan-前實查點清單（皆帶預設傾向）。
 
 ### 已完成 design 全清單（依批次；檔在 `docs/specs/`）
 
@@ -85,7 +97,11 @@
 - **P4 呈現層**（`...-P4-presentation-layer-design.md`，`934cf54`）：匯出 DAG `export_frontend_data`→MinIO→host `make export-sync`→人審 commit 進 `frontend/public/data/`（**committed 靜態 minified JSON**，否決 Neon/物件儲存，k8s 不持 GitHub 權杖）；前端 **Next.js 16.2 App Router `output:'export'` 純靜態**（拓撲鐵律編譯期強制）+ Recharts，8 頁；MCP = **FastMCP 3.2 部署 Prefect Horizon（上雲，可被遠端 Claude 查）**，10 工具讀公開 `/data/*.json`，不可用則降級本地 demo 零改碼；Vercel root dir=`frontend/` 零 env。ML 表缺席 `status:"absent"` 容忍（P1 完成即可先上線）。
 - **P5 收尾**（`...-P5-polish-hardening-design.md`，`04b5874`）：CI 安全掃描 **Trivy+gitleaks+CodeQL**（**image gate 卡 GitOps 交棒點**=CRITICAL-with-fix 沒清就不 bump manifest）；架構圖 **Mermaid 4 張**；面試敘事 **三份 JD one-pager + `DECISIONS.md`（ADR-lite 16 條）**。§1 專表畫清「現可定 vs 執行期對真 artifact 做（掃真 image/截 8 圖+1 GIF）」界線，初版禁量化成果。
 
-**下一步**：見上方「寫 plan 的硬序」——接手 session 走 `superpowers:writing-plans`，從 P0 起逐份寫 implementation plan（spec 已完備）→ 同一或另一 session 執行。各 design 尾段有 plan-前實查點清單（皆帶預設傾向）。
+**下一步怎麼決定**（不寫死「下一步是 X」——那種句子上次落後了兩個 phase）：
+查 [`docs/SPEC_STATUS.md`](docs/SPEC_STATUS.md) 找出還是「已規劃未實作」的最上游項目，
+再套上方「寫 plan 的硬序」＋跨 plan 協調點，就是下一份要寫的 plan。
+接手 session 走 `superpowers:writing-plans` → 同一或另一 session 執行。各 design 尾段有 plan-前實查點清單（皆帶預設傾向）。
+**做完一個階段的同一個 commit，要把 `docs/SPEC_STATUS.md` 那幾行從「已規劃未實作」改成「已實作」並填實作證據**——閘會驗證據對不對得到檔案。
 
 **關鍵鎖定決策**（正本在 NORTH_STAR「已鎖定決策清單」+「LLM／微調層與留言語料」+「GA4 第二真來源 ＋ 三工具翻案」+ M4 原生算力原則）：Kafka（P3 佇列）· **＋Redis/ClickHouse/Flink（2026-07-09 翻案，各有獨特職務，見上）** · agent 框架 LangGraph（砍 CrewAI）· 向量庫 pgvector · embedding 本地 · 生成 Ollama/Gemini 可切 · 微調 HuggingFace（砍 MLX）· **重算力原生跑 M4 host**（kind 摸不到 Apple GPU）產出可攜雲端 · 呈現層 Next.js/Vercel（平台不部署，匯出 JSON 為合約，前端打不到本地 k8s）· MCP server 為 P4/P5 加分 · **前端說明式 UI**（仿 ga-insight 三層：InfoTooltip/ChartCaption/Explainer，跨 P4/P6/P7 硬性）。
 

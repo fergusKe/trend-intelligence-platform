@@ -1,0 +1,43 @@
+name: guardrails
+# 讀者＝**每一次 push 與每一個 PR 的作者，無條件**（RULES §6）。
+#
+# 這支刻意**沒有 path filter**。其他五支 workflow 全部有 path filter，結果是
+# 最近 11 個 commit 一次 CI 都沒觸發——它們改的檔案剛好都落在所有 filter 之外。
+# 文件漂移與 spec 台帳這兩件事，恰恰最常發生在「只改 docs」的 commit 上，
+# 那正是所有 path filter 都不會命中的地帶。所以這裡不設 filter：
+# 每個 commit 都跑，跑不到 40 秒，Actions 在 public repo 免費。
+on:
+  push:
+  pull_request:
+  workflow_dispatch: {}
+concurrency:
+  group: guardrails-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # 閘的母體來自 git ls-files；shallow clone 會讓分母失真（RULES §3）
+
+      - uses: astral-sh/setup-uv@v8.3.2
+        with: {python-version: "3.12"}
+
+      # 閘本體：純標準庫，不需要任何安裝就能跑
+      - name: 閘 1 — 文件宣稱 vs 磁碟事實
+        run: python scripts/gates/check_docs_drift.py
+
+      - name: 閘 2 — spec ↔ 台帳 對帳
+        run: python scripts/gates/check_spec_ledger.py
+
+      # 沒有這一步，上面兩步的綠燈分不出「檢查過了」跟「檢查沒在檢查」（RULES §1）
+      - name: 陽性對照 — 證明上面兩支閘在該紅時會紅
+        run: python scripts/gates/positive_control.py
+
+      - name: 閘的測試
+        run: |
+          uv venv /tmp/gates-venv
+          source /tmp/gates-venv/bin/activate
+          uv pip install "pytest==9.1.1"
+          pytest scripts/gates/tests/ -v

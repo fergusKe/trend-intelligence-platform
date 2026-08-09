@@ -1,3 +1,8 @@
+<!-- plan-status: implemented -->
+<!-- checkbox-policy: not-tracked -->
+<!-- 同 P0 plan：103 個 checkbox 全程 0 勾，進度實際走 git log 與 errata §F-2。
+     誠實宣告 not-tracked，而不是事後補勾。狀態真源是 docs/SPEC_STATUS.md。 -->
+
 # P1 資料管線 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
